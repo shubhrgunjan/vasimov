@@ -1,0 +1,285 @@
+# vasimov/config/joints.yaml
+# Joint convention and mapping table for Asimov 1.
+# Ordered by Firmware CAN bus actuator index 0 through 24.
+#
+# Provenance:
+# - Firmware indices and names: docs.menlo.ai/asimov/1/program/api/robot-control#joint-order [VERIFIED]
+# - Sim joint names, effort limits, and velocity limits: sim-model/urdf/asimov_1.urdf [VERIFIED]
+# - Sim ranges: sim-model/xmls/asimov_1.xml [VERIFIED]
+# - Gain groups: isaac_asimov/source/cyclotron/cyclotron/assets/robots/asimov_1.py [VERIFIED]
+
+joints:
+  - index: 0
+    firmware_name: "L_Hip_Pitch"
+    sim_joint: "left_hip_pitch_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-1.5700, 1.5700]
+    firmware_range: [-1.5700, 1.5700]
+    effort_limit: 45.0
+    velocity_limit: 12.57
+    gain_group: "hip_pitch"
+
+  - index: 1
+    firmware_name: "L_Hip_Roll"
+    sim_joint: "left_hip_roll_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-0.7854, 0.7854]
+    firmware_range: [-0.7854, 0.7854]
+    effort_limit: 45.0
+    velocity_limit: 3.98
+    gain_group: "hip_roll"
+
+  - index: 2
+    firmware_name: "L_Hip_Yaw"
+    sim_joint: "left_hip_yaw_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-0.7854, 0.7854]
+    firmware_range: [-0.7854, 0.7854]
+    effort_limit: 28.0
+    velocity_limit: 5.45
+    gain_group: "hip_yaw"
+
+  - index: 3
+    firmware_name: "L_Knee"
+    sim_joint: "left_knee_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [0.0000, 1.5000]
+    firmware_range: [0.0000, 1.5000]
+    effort_limit: 45.0
+    velocity_limit: 12.25
+    gain_group: "knee"
+
+  - index: 4
+    firmware_name: "L_Ankle_A"
+    sim_joint: "left_ankle_pitch_joint"
+    sign: "UNKNOWN"  # Physical motor A is part of parallel differential pair (handled in ankle_map.py)
+    offset: "UNKNOWN"
+    sim_range: [-0.3500, 0.3500]
+    firmware_range: "UNKNOWN"  # Motor A actuator angle
+    effort_limit: 40.0
+    velocity_limit: 9.32
+    gain_group: "ankle_pitch"
+
+  - index: 5
+    firmware_name: "L_Ankle_B"
+    sim_joint: "left_ankle_roll_joint"
+    sign: "UNKNOWN"  # Physical motor B is part of parallel differential pair (handled in ankle_map.py)
+    offset: "UNKNOWN"
+    sim_range: [-0.1000, 0.1000]
+    firmware_range: "UNKNOWN"  # Motor B actuator angle
+    effort_limit: 17.0
+    velocity_limit: 9.32
+    gain_group: "ankle_roll"
+
+  - index: 6
+    firmware_name: "R_Hip_Pitch"
+    sim_joint: "right_hip_pitch_joint"
+    sign: -1.0  # Axis [0, -1, 0]: negative sim rotation corresponds to forward pitch
+    offset: 0.0
+    sim_range: [-1.5700, 1.5700]
+    firmware_range: [-1.5700, 1.5700]
+    effort_limit: 45.0
+    velocity_limit: 12.57
+    gain_group: "hip_pitch"
+
+  - index: 7
+    firmware_name: "R_Hip_Roll"
+    sim_joint: "right_hip_roll_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-0.7854, 0.7854]
+    firmware_range: [-0.7854, 0.7854]
+    effort_limit: 45.0
+    velocity_limit: 3.98
+    gain_group: "hip_roll"
+
+  - index: 8
+    firmware_name: "R_Hip_Yaw"
+    sim_joint: "right_hip_yaw_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-0.7854, 0.7854]
+    firmware_range: [-0.7854, 0.7854]
+    effort_limit: 28.0
+    velocity_limit: 5.45
+    gain_group: "hip_yaw"
+
+  - index: 9
+    firmware_name: "R_Knee"
+    sim_joint: "right_knee_joint"
+    sign: -1.0  # Axis [0, -1, 0]: range [-1.5, 0] corresponds to [0, +1.5] flexion
+    offset: 0.0
+    sim_range: [-1.5000, 0.0000]
+    firmware_range: [0.0000, 1.5000]
+    effort_limit: 45.0
+    velocity_limit: 12.25
+    gain_group: "knee"
+
+  - index: 10
+    firmware_name: "R_Ankle_A"
+    sim_joint: "right_ankle_pitch_joint"
+    sign: "UNKNOWN"  # Physical motor A is part of parallel differential pair
+    offset: "UNKNOWN"
+    sim_range: [-0.3500, 0.3500]
+    firmware_range: "UNKNOWN"
+    effort_limit: 40.0
+    velocity_limit: 9.32
+    gain_group: "ankle_pitch"
+
+  - index: 11
+    firmware_name: "R_Ankle_B"
+    sim_joint: "right_ankle_roll_joint"
+    sign: "UNKNOWN"  # Physical motor B is part of parallel differential pair
+    offset: "UNKNOWN"
+    sim_range: [-0.1000, 0.1000]
+    firmware_range: "UNKNOWN"
+    effort_limit: 17.0
+    velocity_limit: 9.32
+    gain_group: "ankle_roll"
+
+  - index: 12
+    firmware_name: "L_Shoulder_Pitch"
+    sim_joint: "left_shoulder_pitch_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-3.1416, 0.8727]
+    firmware_range: [-3.1416, 0.8727]
+    effort_limit: 30.0
+    velocity_limit: 3.98
+    gain_group: "shoulder_pitch"
+
+  - index: 13
+    firmware_name: "L_Shoulder_Roll"
+    sim_joint: "left_shoulder_roll_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-1.5708, 0.0000]
+    firmware_range: [-1.5708, 0.0000]
+    effort_limit: 25.0
+    velocity_limit: 12.25
+    gain_group: "shoulder_roll"
+
+  - index: 14
+    firmware_name: "L_Shoulder_Yaw"
+    sim_joint: "left_shoulder_yaw_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-1.5708, 1.5708]
+    firmware_range: [-1.5708, 1.5708]
+    effort_limit: 20.0
+    velocity_limit: 5.45
+    gain_group: "shoulder_yaw"
+
+  - index: 15
+    firmware_name: "L_Elbow"
+    sim_joint: "left_elbow_joint"
+    sign: 1.0
+    offset: 0.0  # Ref in XML is +0.7854
+    sim_range: [0.0000, 2.0944]
+    firmware_range: [0.0000, 2.0944]
+    effort_limit: 12.0
+    velocity_limit: 9.32
+    gain_group: "elbow_wrist"
+
+  - index: 16
+    firmware_name: "L_Wrist_Yaw"
+    sim_joint: "left_wrist_yaw_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-3.1416, 3.1416]
+    firmware_range: [-3.1416, 3.1416]
+    effort_limit: 12.0
+    velocity_limit: 9.32
+    gain_group: "elbow_wrist"
+
+  - index: 17
+    firmware_name: "R_Shoulder_Pitch"
+    sim_joint: "right_shoulder_pitch_joint"
+    sign: 1.0  # Axis [0, -1, 0]
+    offset: 0.0
+    sim_range: [-0.8727, 3.1416]
+    firmware_range: [-0.8727, 3.1416]
+    effort_limit: 30.0
+    velocity_limit: 3.98
+    gain_group: "shoulder_pitch"
+
+  - index: 18
+    firmware_name: "R_Shoulder_Roll"
+    sim_joint: "right_shoulder_roll_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [0.0000, 1.5708]
+    firmware_range: [0.0000, 1.5708]
+    effort_limit: 25.0
+    velocity_limit: 12.25
+    gain_group: "shoulder_roll"
+
+  - index: 19
+    firmware_name: "R_Shoulder_Yaw"
+    sim_joint: "right_shoulder_yaw_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-1.5708, 1.5708]
+    firmware_range: [-1.5708, 1.5708]
+    effort_limit: 20.0
+    velocity_limit: 5.45
+    gain_group: "shoulder_yaw"
+
+  - index: 20
+    firmware_name: "R_Elbow"
+    sim_joint: "right_elbow_joint"
+    sign: -1.0  # Axis [0, 1, 0] with range [-2.0944, 0]
+    offset: 0.0  # Ref in XML is -0.7854
+    sim_range: [-2.0944, 0.0000]
+    firmware_range: [0.0000, 2.0944]
+    effort_limit: 12.0
+    velocity_limit: 9.32
+    gain_group: "elbow_wrist"
+
+  - index: 21
+    firmware_name: "R_Wrist_Yaw"
+    sim_joint: "right_wrist_yaw_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-3.1416, 3.1416]
+    firmware_range: [-3.1416, 3.1416]
+    effort_limit: 12.0
+    velocity_limit: 9.32
+    gain_group: "elbow_wrist"
+
+  - index: 22
+    firmware_name: "Waist_Yaw"
+    sim_joint: "waist_yaw_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-1.5708, 1.5708]
+    firmware_range: [-1.5708, 1.5708]
+    effort_limit: 40.0
+    velocity_limit: 12.57
+    gain_group: "waist"
+
+  - index: 23
+    firmware_name: "Neck_Yaw"
+    sim_joint: "neck_yaw_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-0.7854, 0.7854]  # ASSUMED humanoid placeholder
+    firmware_range: "UNKNOWN"
+    effort_limit: 12.0
+    velocity_limit: 9.32
+    gain_group: "neck"
+
+  - index: 24
+    firmware_name: "Neck_Pitch"
+    sim_joint: "neck_pitch_joint"
+    sign: 1.0
+    offset: 0.0
+    sim_range: [-0.5236, 0.5236]  # ASSUMED humanoid placeholder
+    firmware_range: "UNKNOWN"
+    effort_limit: 12.0
+    velocity_limit: 9.32
+    gain_group: "neck"

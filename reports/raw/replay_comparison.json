@@ -1,0 +1,26 @@
+{
+  "recording_path": "/Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/vasimov/reports/raw/run_recording.npz",
+  "total_steps": 1200,
+  "duration_s": 6.0,
+  "replay_wall_time_s": 0.5059854159990209,
+  "replay_rtf": 11.858049284194408,
+  "config_hashes": {
+    "gains.yaml": "248d823f13d90109e9522b40cff00b38d657d6bb80d4d3951c7ce8ea5d53d1b2",
+    "joints.yaml": "76c81a2b07e7f309e233ac0d23c45c068ceb08db4a6003ce7a33c3d07ac1e3d8",
+    "motors.yaml": "8191fb8546fcf62dbe3eb4d1baac0dedbdcf1e00cde327f9d33a2f01b1aca259",
+    "asimov_1_vasimov.xml": "119b9362c416789ae8f8faef3b19ca03fc8633c91525558bf818464a6244d335",
+    "combined_config_hash": "23fabd9006b3f4efa90622a47d529d49809b2d5e025e69c134fbdfa77d2ddc70"
+  },
+  "is_bit_identical": true,
+  "tolerances": {
+    "max_abs_diff_qpos": 0.0,
+    "max_abs_diff_qvel": 0.0,
+    "max_abs_diff_ctrl": 0.0,
+    "final_step_diff_qpos": 0.0,
+    "final_step_diff_qvel": 0.0,
+    "mean_abs_diff_qpos": 0.0,
+    "mean_abs_diff_qvel": 0.0
+  },
+  "determinism_verdict": "BIT_IDENTICAL (exact 0.0 tolerance across all steps)",
+  "determinism_analysis": "MuJoCo single-threaded physics evaluation (nthread=1) combined with step-synchronized command ingestion provides bit-level identical reproducibility across repeated runs. Because commands are applied at discrete simulation step indices rather than non-deterministic wall-clock timer interrupts, no inter-thread timing jitter is introduced during replay."
+}

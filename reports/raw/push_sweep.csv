@@ -1,0 +1,9 @@
+direction,force_n,status,fell,peak_disp_cm,peak_tilt_deg,return_time_s,settle_time_s,max_torque_nm,l1_bound,knee_effort_limit_nm,knee_velocity_limit_rad_s
+x,40.0,SURVIVED,False,1.15,3.90,0.825,0.910,16.00,False,45.0,12.25
+x,80.0,SURVIVED,False,3.30,6.38,1.010,2.895,16.00,False,45.0,12.25
+x,120.0,FELL,True,93.95,200.12,N/A,N/A,30.00,True,45.0,12.25
+x,160.0,FELL,True,93.83,197.63,N/A,N/A,30.00,True,45.0,12.25
+y,40.0,SURVIVED,False,1.26,2.04,0.005,0.105,16.00,False,45.0,12.25
+y,80.0,SURVIVED,False,3.04,2.34,0.005,0.445,16.00,False,45.0,12.25
+y,120.0,SURVIVED,False,6.06,2.89,0.005,1.600,16.91,False,45.0,12.25
+y,160.0,FELL,True,95.85,195.64,0.005,N/A,39.97,True,45.0,12.25

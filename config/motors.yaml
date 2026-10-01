@@ -1,0 +1,48 @@
+# vasimov/config/motors.yaml
+# Motor model configuration for Virtual Asimov 1
+# Reference: vasimov/reports/official_params.md and vasimov/config/joints.yaml
+
+layers:
+  l0:
+    name: "L0 - PD Law and Effort Torque Clip"
+    enabled: true
+    description: "Ideal PD control law with hard symmetric torque clipping to effort_limit. Always active."
+    status: "VERIFIED"
+
+  l1:
+    name: "L1 - Velocity-Dependent Torque Limit"
+    enabled: false # Default matches official training sim (no velocity derating in Isaac / MuJoCo)
+    description: "Brushless motor back-EMF / speed-torque derating envelope: tau_max(w) = effort * max(0, 1 - |w|/vel_limit)"
+    status: "ASSUMED"
+    rationale: "Theoretical linear DC/BLDC motor torque-speed curve. Default OFF to match official Isaac Lab / MJLab training sim."
+
+  l2:
+    name: "L2 - Rotor Armature and Joint Damping"
+    enabled: true
+    mode: "mujoco_xml" # Handled natively in MuJoCo physics engine via joint armature and damping attributes
+    description: "Reflected rotor inertia (armature) and joint viscous friction (damping) defined in model XML."
+    status: "VERIFIED"
+    sources:
+      armature: "asimov-mjlab/asimov_constants.py rotor inertias or asimov_1.xml"
+      damping: "asimov-mjlab/asimov_constants.py and isaac_asimov/asimov_1.py"
+
+  l3:
+    name: "L3 - Command Delay and First-Order Dynamics"
+    enabled: false # Default OFF
+    mode: "lag"    # Options: 'lag' (first-order low-pass filter) or 'delay' (discrete step buffer)
+    lag_tau: 0.01  # First-order time constant in seconds (ASSUMED)
+    delay_steps: 1 # Number of control decimation steps delay (ASSUMED)
+    status: "ASSUMED"
+    rationale: "Models CAN/EtherCAT bus latency and motor drive current loop rise time. Default OFF."
+
+  l4:
+    name: "L4 - Current and Thermal Dynamics"
+    enabled: false
+    status: "NOT MODELED"
+    description: "Winding resistance, thermal capacitance, and temperature rise dynamics."
+    rationale: "No motor winding resistance, thermal resistance, or thermal time-constant datasheets are published in upstream BOM or docs."
+
+# Per-joint motor actuator parameters (derived from config/joints.yaml and reports/official_params.md)
+defaults:
+  control_rate_hz: 50.0 # 0.02s decimation period (4 physics steps at 200 Hz)
+  sim_timestep: 0.005   # 200 Hz physics timestep

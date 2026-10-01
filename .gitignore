@@ -1,0 +1,19 @@
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.DS_Store
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Upstream submodules/clones (contain their own repositories)
+upstream/
+
+# Testing & temp caches
+.pytest_cache/
+.coverage
+htmlcov/

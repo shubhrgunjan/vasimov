@@ -1,0 +1,128 @@
+================================================================================
+ASIMOV 1 MUJOCO MODEL INSPECTION REPORT
+================================================================================
+Source Model Path : /Users/admin/Projects/Asimov-Reverse-Engeneering/asimov-stack/official-asimov-1/sim-model/xmls/asimov_1.xml
+MuJoCo Version    : 3.14.0
+
+--------------------------------------------------------------------------------
+1. MODEL SUMMARY DIMENSIONS
+--------------------------------------------------------------------------------
+  nq (generalized coords) : 30
+  nv (degrees of freedom) : 29
+  nu (actuator count)     : 0
+  nbody (bodies count)    : 27
+  njnt (joints count)     : 24
+  ngeom (geoms count)     : 48
+  nsensor (sensors count) : 5
+  opt.timestep            : 0.005000 s (200.0 Hz)
+  opt.integrator          : 3
+  opt.solver              : 2
+
+--------------------------------------------------------------------------------
+2. FLOATING BASE (FREE JOINT) DETAILS
+--------------------------------------------------------------------------------
+  Found floating base joint at index 0:
+    Joint Name      : floating_base
+    Attached Body   : id=1 (pelvis_link)
+    qpos range      : [0 : 7] (3 position + 4 quaternion coords)
+    dof range       : [0 : 6] (3 translation + 3 rotation DOFs)
+    Initial Pos [m] : x=0.000000, y=0.000000, z=0.630000
+    Initial Quat    : w=1.000000, x=0.000000, y=0.000000, z=0.000000
+
+--------------------------------------------------------------------------------
+3. INERTIAL & ROOT BODY PROPERTIES
+--------------------------------------------------------------------------------
+  Total Robot Mass : 32.224913 kg
+  Root Body ID     : 1 (pelvis_link)
+  Root Body Mass   : 3.506913 kg
+  Root Body Pos    : [0.000000, 0.000000, 0.630000] m
+  Root Body Quat   : [1.000000, 0.000000, 0.000000, 0.000000]
+  Robot CoM (init) : [-0.054737, 0.000008, 0.642570] m
+
+--------------------------------------------------------------------------------
+4. JOINTS TABLE (njnt = 24)
+--------------------------------------------------------------------------------
+Idx | Joint Name                   | Type   | qpos  | dof  | Range [rad]            | Damping  | Armature   | Friction
+---------------------------------------------------------------------------------------------------------
+  0 | floating_base                | free   |     0 |    0 | unlimited              |   0.0000 |   0.000000 |   0.0000
+  1 | left_hip_pitch_joint         | hinge  |     7 |    6 | [-1.5700, +1.5700]     |   0.0000 |   0.095625 |   0.0000
+  2 | left_hip_roll_joint          | hinge  |     8 |    7 | [-0.7854, +0.7854]     |   0.0000 |   0.110000 |   0.0000
+  3 | left_hip_yaw_joint           | hinge  |     9 |    8 | [-0.7854, +0.7854]     |   0.0000 |   0.038000 |   0.0000
+  4 | left_knee_joint              | hinge  |    10 |    9 | [+0.0000, +1.5000]     |   0.0000 |   0.033955 |   0.0000
+  5 | left_ankle_pitch_joint       | hinge  |    11 |   10 | [-0.3500, +0.3500]     |   0.0000 |   0.056506 |   0.0000
+  6 | left_ankle_roll_joint        | hinge  |    12 |   11 | [-0.1000, +0.1000]     |   0.0000 |   0.056506 |   0.0000
+  7 | right_hip_pitch_joint        | hinge  |    13 |   12 | [-1.5700, +1.5700]     |   0.0000 |   0.095625 |   0.0000
+  8 | right_hip_roll_joint         | hinge  |    14 |   13 | [-0.7854, +0.7854]     |   0.0000 |   0.110000 |   0.0000
+  9 | right_hip_yaw_joint          | hinge  |    15 |   14 | [-0.7854, +0.7854]     |   0.0000 |   0.038000 |   0.0000
+ 10 | right_knee_joint             | hinge  |    16 |   15 | [-1.5000, +0.0000]     |   0.0000 |   0.033955 |   0.0000
+ 11 | right_ankle_pitch_joint      | hinge  |    17 |   16 | [-0.3500, +0.3500]     |   0.0000 |   0.056506 |   0.0000
+ 12 | right_ankle_roll_joint       | hinge  |    18 |   17 | [-0.1000, +0.1000]     |   0.0000 |   0.056506 |   0.0000
+ 13 | waist_yaw_joint              | hinge  |    19 |   18 | [-1.5708, +1.5708]     |   0.0000 |   0.095625 |   0.0000
+ 14 | right_shoulder_pitch_joint   | hinge  |    20 |   19 | [-0.8727, +3.1416]     |   0.0000 |   0.110000 |   0.0000
+ 15 | right_shoulder_roll_joint    | hinge  |    21 |   20 | [+0.0000, +1.5708]     |   0.0000 |   0.033955 |   0.0000
+ 16 | right_shoulder_yaw_joint     | hinge  |    22 |   21 | [-1.5708, +1.5708]     |   0.0000 |   0.038000 |   0.0000
+ 17 | right_elbow_joint            | hinge  |    23 |   22 | [-2.0944, +0.0000]     |   0.0000 |   0.028253 |   0.0000
+ 18 | right_wrist_yaw_joint        | hinge  |    24 |   23 | [-3.1416, +3.1416]     |   0.0000 |   0.028253 |   0.0000
+ 19 | left_shoulder_pitch_joint    | hinge  |    25 |   24 | [-3.1416, +0.8727]     |   0.0000 |   0.110000 |   0.0000
+ 20 | left_shoulder_roll_joint     | hinge  |    26 |   25 | [-1.5708, +0.0000]     |   0.0000 |   0.033955 |   0.0000
+ 21 | left_shoulder_yaw_joint      | hinge  |    27 |   26 | [-1.5708, +1.5708]     |   0.0000 |   0.038000 |   0.0000
+ 22 | left_elbow_joint             | hinge  |    28 |   27 | [+0.0000, +2.0944]     |   0.0000 |   0.028253 |   0.0000
+ 23 | left_wrist_yaw_joint         | hinge  |    29 |   28 | [-3.1416, +3.1416]     |   0.0000 |   0.028253 |   0.0000
+
+--------------------------------------------------------------------------------
+5. ACTUATORS TABLE (nu = 0)
+--------------------------------------------------------------------------------
+  Notice: model.nu = 0. No actuators are defined in this XML file.
+  Explanation from sim-model/README.md:
+    'No actuators are defined in the XML — the training sim configures them in Python.'
+    'Torque motors for the standalone viewer (training adds position actuators
+     programmatically via BuiltinPositionActuatorCfg; the viewer applies its own
+     PD in JS and writes torque to ctrl).'
+  In simulation, joint-space torques are applied directly to data.qfrc_applied.
+
+--------------------------------------------------------------------------------
+6. SENSORS TABLE (nsensor = 5)
+--------------------------------------------------------------------------------
+Idx | Sensor Name          | Sensor Type            | Dim | Attached Site/Body  
+---------------------------------------------------------------------------
+  0 | imu_ang_vel          | mjSENS_GYRO            |   3 | imu_in_pelvis       
+  1 | imu_lin_vel          | mjSENS_VELOCIMETER     |   3 | imu_in_pelvis       
+  2 | imu_lin_acc          | mjSENS_ACCELEROMETER   |   3 | imu_in_pelvis       
+  3 | imu_quat             | mjSENS_FRAMEQUAT       |   4 | imu_in_pelvis       
+  4 | root_angmom          | mjSENS_SUBTREEANGMOM   |   3 | pelvis_link         
+
+--------------------------------------------------------------------------------
+7. BODIES INERTIAL BREAKDOWN (nbody = 27)
+--------------------------------------------------------------------------------
+ ID | Body Name                    |  Mass [kg] | Pos [m] (rel to parent)            
+----------------------------------------------------------------------------------
+  0 | world                        |   0.000000 | [+0.0000, +0.0000, +0.0000]        
+  1 | pelvis_link                  |   3.506913 | [+0.0000, +0.0000, +0.6300]        
+  2 | left_hip_pitch_link          |   1.056301 | [-0.0520, +0.0675, -0.0440]        
+  3 | left_hip_roll_link           |   0.414368 | [+0.0423, +0.0400, +0.0000]        
+  4 | left_hip_yaw_link            |   1.866570 | [-0.0423, +0.0070, -0.0515]        
+  5 | left_knee_link               |   2.391142 | [+0.0015, -0.0066, -0.2184]        
+  6 | left_ankle_pitch_link        |   0.273090 | [-0.0015, -0.0004, -0.2723]        
+  7 | left_ankle_roll_link         |   0.444680 | [-0.0015, +0.0000, -0.0100]        
+  8 | right_hip_pitch_link         |   1.056297 | [-0.0520, -0.0675, -0.0440]        
+  9 | right_hip_roll_link          |   0.414825 | [+0.0423, -0.0400, +0.0000]        
+ 10 | right_hip_yaw_link           |   1.866472 | [-0.0423, -0.0064, -0.0516]        
+ 11 | right_knee_link              |   2.391102 | [+0.0015, +0.0060, -0.2184]        
+ 12 | right_ankle_pitch_link       |   0.273089 | [-0.0015, +0.0005, -0.2723]        
+ 13 | right_ankle_roll_link        |   0.444680 | [-0.0015, +0.0000, -0.0100]        
+ 14 | waist_yaw_link               |   8.208502 | [-0.0520, +0.0000, +0.0748]        
+ 15 | neck_yaw_link                |   0.532789 | [-0.0166, +0.0000, +0.3782]        
+ 16 | neck_pitch_link              |   0.394056 | [+0.0000, +0.0000, +0.0373]        
+ 17 | right_shoulder_pitch_link    |   0.599156 | [-0.0262, -0.0965, +0.2611]        
+ 18 | right_shoulder_roll_link     |   1.313222 | [+0.0000, -0.0654, -0.0001]        
+ 19 | right_shoulder_yaw_link      |   0.712262 | [+0.0000, +0.0000, -0.1290]        
+ 20 | right_elbow_link             |   0.662314 | [+0.0000, +0.0000, -0.0966]        
+ 21 | right_wrist_yaw_link         |   0.058060 | [+0.0866, +0.0000, -0.0726]        
+ 22 | left_shoulder_pitch_link     |   0.599157 | [-0.0262, +0.0965, +0.2611]        
+ 23 | left_shoulder_roll_link      |   1.313228 | [+0.0001, +0.0654, +0.0000]        
+ 24 | left_shoulder_yaw_link       |   0.712262 | [+0.0000, +0.0000, -0.1290]        
+ 25 | left_elbow_link              |   0.662318 | [+0.0000, +0.0000, -0.0963]        
+ 26 | left_wrist_yaw_link          |   0.058059 | [+0.0866, +0.0000, -0.0726]        
+--------------------------------------------------------------------------------
+Total Model Mass (sum of bodies): 32.224913 kg
+================================================================================

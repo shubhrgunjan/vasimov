@@ -1,0 +1,101 @@
+$ /Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/.venv/bin/menlo status --json
+{
+  "robot": "vasimov",
+  "mode": "udp",
+  "host": "127.0.0.1",
+  "verdict": "NOT READY",
+  "ready": false,
+  "problems": [
+    {
+      "code": "wrong_mode",
+      "message": "the robot is in DAMP; stand() it first",
+      "blocking": true
+    },
+    {
+      "code": "unknown_battery",
+      "message": "the robot reports no battery",
+      "blocking": false
+    }
+  ],
+  "robot_mode": "DAMP",
+  "armed": false,
+  "battery_percent": null,
+  "faults": [],
+  "error_flags": 0,
+  "max_joint_temp_c": 25.0,
+  "state_rate_hz": 9.0,
+  "state_age_s": 0.099,
+  "fresh": true
+}
+[Exit code: 0]
+
+$ /Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/.venv/bin/menlo stand -y
+vasimov (udp, 127.0.0.1) · DAMP · battery not reported → stand, then wait until armed
+Standing. Waiting for the robot to arm (0.5 s upright)...
+Armed: ready to balance, menlo balance
+[Exit code: 0]
+
+$ /Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/.venv/bin/menlo status --json
+{
+  "robot": "vasimov",
+  "mode": "udp",
+  "host": "127.0.0.1",
+  "verdict": "READY",
+  "ready": true,
+  "problems": [
+    {
+      "code": "unknown_battery",
+      "message": "the robot reports no battery",
+      "blocking": false
+    }
+  ],
+  "robot_mode": "STAND",
+  "armed": true,
+  "battery_percent": null,
+  "faults": [],
+  "error_flags": 0,
+  "max_joint_temp_c": 25.0,
+  "state_rate_hz": 9.0,
+  "state_age_s": 0.069,
+  "fresh": true
+}
+[Exit code: 0]
+
+$ /Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/.venv/bin/menlo damp -y
+vasimov (udp, 127.0.0.1) · STAND, not armed · battery not reported → damp: every actuator stops holding its position and a standing robot falls, so the robot must be supported. Not an emergency stop: use the E-Stop in Asimov Manager, or cut power at the battery unit.
+Robot mode FAULT_DAMP, held by FALL_DETECTED until the firmware restarts.
+[Exit code: 0]
+
+$ /Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/.venv/bin/menlo status --json
+{
+  "robot": "vasimov",
+  "mode": "udp",
+  "host": "127.0.0.1",
+  "verdict": "FAULTED",
+  "ready": false,
+  "problems": [
+    {
+      "code": "faulted",
+      "message": "the firmware latched DAMP (FALL_DETECTED); it stays latched until the firmware restarts",
+      "blocking": true
+    },
+    {
+      "code": "unknown_battery",
+      "message": "the robot reports no battery",
+      "blocking": false
+    }
+  ],
+  "robot_mode": "FAULT_DAMP",
+  "armed": false,
+  "battery_percent": null,
+  "faults": [
+    "FALL_DETECTED"
+  ],
+  "error_flags": 257,
+  "max_joint_temp_c": 25.0,
+  "state_rate_hz": 9.0,
+  "state_age_s": 0.083,
+  "fresh": true
+}
+[Exit code: 0]
+

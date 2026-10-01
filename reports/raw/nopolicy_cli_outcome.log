@@ -1,0 +1,18 @@
+$ /Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/.venv/bin/menlo stand -y
+[Elapsed: 0.97s | Exit code: 0]
+vasimov (udp, 127.0.0.1) · DAMP · battery not reported → stand, then wait until armed
+Standing. Waiting for the robot to arm (0.5 s upright)...
+Armed: ready to balance, menlo balance
+
+
+$ /Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/.venv/bin/menlo balance -y
+[Elapsed: 5.90s | Exit code: 3]
+vasimov (udp, 127.0.0.1) · STAND, armed · battery not reported → balance: MOVE at zero velocity, the walking policy balances the robot
+menlo balance: sent zero velocity, but the robot still reports STAND after 5.0 s. Another controller may hold it (the Asimov Manager cockpit or a paired gamepad), and a command it outranks has no effect
+
+
+$ /Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/.venv/bin/menlo walk --vx 0.2 --duration 2 -y
+[Elapsed: 0.39s | Exit code: 3]
+Not feasible: vasimov is in STAND. Run `menlo balance` first.
+
+

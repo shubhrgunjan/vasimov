@@ -1,0 +1,7 @@
+scenario,actuator_type,fell,settled_z_m,drop_mm,drift_mm_s,pitch_osc_deg,max_torque_nm
+Stand Settle (No Push),External PD,False,0.60962,29.38,0.0087,0.0166,16.00
+Stand Settle (No Push),Native Pos,False,0.60962,29.38,0.0087,0.0166,15.56
+120 N Sagittal Push (+x),External PD,True,0.01277,626.23,0.0059,0.0006,30.00
+120 N Sagittal Push (+x),Native Pos,True,0.01207,626.93,0.0012,0.0009,30.00
+160 N Lateral Push (+y),External PD,True,0.11180,527.20,0.0005,0.0055,39.97
+160 N Lateral Push (+y),Native Pos,True,0.11180,527.20,0.0003,0.0018,40.06

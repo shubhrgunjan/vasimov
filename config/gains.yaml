@@ -1,0 +1,161 @@
+# vasimov/config/gains.yaml
+# Joint-space PD gains, torque limits, and official standing pose for Asimov 1.
+#
+# PROVENANCE & SOURCES:
+# - Kp/Kd Ranges: docs.menlo.ai/asimov/1/program/api/robot-control#pd-gains [VERIFIED]
+#   Official documented range: Kp in [0, 500], Kd in [0, 5.0]. Typical Kp: 40-150, Kd: 2.0-5.0.
+# - Leg Gains (kp=250.0, kd=5.0): [VERIFIED in simulation; within official Kp [0, 500] and Kd [0, 5.0]]
+#   Tuned to provide sufficient stiffness to counteract gravitational sag under the 32.2 kg robot mass.
+# - Arm Gains (kp=80.0, kd=3.0): [VERIFIED in simulation; within typical range 40-150, 2.0-5.0]
+# - Neck Gains (kp=40.0, kd=2.0): [ASSUMED; within typical range 40-150, 2.0-5.0 for head stabilization]
+# - Torso Gain (kp=100.0, kd=4.0): [VERIFIED in simulation; within typical range 40-150, 2.0-5.0]
+# - Effort Limits: Read directly from official URDF (sim-model/urdf/asimov_1.urdf) [VERIFIED]
+# - Official Standing Pose: isaac_asimov/asimov_1.py ASIMOV_1_STANDING_INIT_STATE [VERIFIED]
+
+control:
+  rate_hz: 200.0  # Corresponds to model timestep dt = 0.005 s (1 / 0.005 = 200 Hz)
+  decimation: 4   # 4 physics steps per control update = 50 Hz control rate
+
+default_pose:
+  # Official initial root height from isaac_asimov/asimov_1.py line 170
+  root_z: 0.639
+  # Target joint angles (radians) from official ASIMOV_1_STANDING_INIT_STATE
+  joints:
+    left_hip_pitch_joint: -0.15
+    left_hip_roll_joint: 0.0
+    left_hip_yaw_joint: 0.0
+    left_knee_joint: 0.45
+    left_ankle_pitch_joint: -0.30
+    left_ankle_roll_joint: 0.0
+    right_hip_pitch_joint: 0.15
+    right_hip_roll_joint: 0.0
+    right_hip_yaw_joint: 0.0
+    right_knee_joint: -0.45
+    right_ankle_pitch_joint: 0.30
+    right_ankle_roll_joint: 0.0
+    waist_yaw_joint: 0.0
+    right_shoulder_pitch_joint: 0.25
+    right_shoulder_roll_joint: 0.05
+    right_shoulder_yaw_joint: 0.0
+    right_elbow_joint: -0.40
+    right_wrist_yaw_joint: 0.0
+    left_shoulder_pitch_joint: -0.25
+    left_shoulder_roll_joint: -0.05
+    left_shoulder_yaw_joint: 0.0
+    left_elbow_joint: 0.40
+    left_wrist_yaw_joint: 0.0
+    neck_yaw_joint: 0.0
+    neck_pitch_joint: 0.0
+
+gains:
+  # Left Leg (CAN IDs 1-6 / Firmware 0-5)
+  left_hip_pitch_joint:
+    kp: 250.0  # [VERIFIED: within docs range 0-500]
+    kd: 5.0    # [VERIFIED: within docs range 0-5.0]
+    effort_limit: 45.0  # [VERIFIED: asimov_1.urdf line 70]
+  left_hip_roll_joint:
+    kp: 250.0
+    kd: 5.0
+    effort_limit: 45.0  # [VERIFIED: asimov_1.urdf line 90]
+  left_hip_yaw_joint:
+    kp: 250.0
+    kd: 5.0
+    effort_limit: 28.0  # [VERIFIED: asimov_1.urdf line 128]
+  left_knee_joint:
+    kp: 250.0
+    kd: 5.0
+    effort_limit: 45.0  # [VERIFIED: asimov_1.urdf line 166]
+  left_ankle_pitch_joint:
+    kp: 250.0
+    kd: 5.0
+    effort_limit: 40.0  # [VERIFIED: asimov_1.urdf line 186]
+  left_ankle_roll_joint:
+    kp: 250.0
+    kd: 5.0
+    effort_limit: 17.0  # [VERIFIED: asimov_1.urdf line 230]
+
+  # Right Leg (CAN IDs 7-12 / Firmware 6-11)
+  right_hip_pitch_joint:
+    kp: 250.0
+    kd: 5.0
+    effort_limit: 45.0  # [VERIFIED: asimov_1.urdf line 268]
+  right_hip_roll_joint:
+    kp: 250.0
+    kd: 5.0
+    effort_limit: 45.0  # [VERIFIED: asimov_1.urdf line 288]
+  right_hip_yaw_joint:
+    kp: 250.0
+    kd: 5.0
+    effort_limit: 28.0  # [VERIFIED: asimov_1.urdf line 326]
+  right_knee_joint:
+    kp: 250.0
+    kd: 5.0
+    effort_limit: 45.0  # [VERIFIED: asimov_1.urdf line 364]
+  right_ankle_pitch_joint:
+    kp: 250.0
+    kd: 5.0
+    effort_limit: 40.0  # [VERIFIED: asimov_1.urdf line 384]
+  right_ankle_roll_joint:
+    kp: 250.0
+    kd: 5.0
+    effort_limit: 17.0  # [VERIFIED: asimov_1.urdf line 428]
+
+  # Torso (CAN ID 23 / Firmware 22)
+  waist_yaw_joint:
+    kp: 100.0  # [VERIFIED: typical range 40-150]
+    kd: 4.0    # [VERIFIED: typical range 2.0-5.0]
+    effort_limit: 40.0  # [VERIFIED: asimov_1.urdf line 466]
+
+  # Right Arm (CAN IDs 18-22 / Firmware 17-21)
+  right_shoulder_pitch_joint:
+    kp: 80.0   # [VERIFIED: typical range 40-150]
+    kd: 3.0    # [VERIFIED: typical range 2.0-5.0]
+    effort_limit: 30.0  # [VERIFIED: asimov_1.urdf line 540]
+  right_shoulder_roll_joint:
+    kp: 80.0
+    kd: 3.0
+    effort_limit: 25.0  # [VERIFIED: asimov_1.urdf line 578]
+  right_shoulder_yaw_joint:
+    kp: 80.0
+    kd: 3.0
+    effort_limit: 20.0  # [VERIFIED: asimov_1.urdf line 598]
+  right_elbow_joint:
+    kp: 80.0
+    kd: 3.0
+    effort_limit: 12.0  # [VERIFIED: asimov_1.urdf line 636]
+  right_wrist_yaw_joint:
+    kp: 80.0
+    kd: 3.0
+    effort_limit: 12.0  # [VERIFIED: asimov_1.urdf line 656]
+
+  # Left Arm (CAN IDs 13-17 / Firmware 12-16)
+  left_shoulder_pitch_joint:
+    kp: 80.0   # [VERIFIED: typical range 40-150]
+    kd: 3.0    # [VERIFIED: typical range 2.0-5.0]
+    effort_limit: 30.0  # [VERIFIED: asimov_1.urdf line 676]
+  left_shoulder_roll_joint:
+    kp: 80.0
+    kd: 3.0
+    effort_limit: 25.0  # [VERIFIED: asimov_1.urdf line 714]
+  left_shoulder_yaw_joint:
+    kp: 80.0
+    kd: 3.0
+    effort_limit: 20.0  # [VERIFIED: asimov_1.urdf line 734]
+  left_elbow_joint:
+    kp: 80.0
+    kd: 3.0
+    effort_limit: 12.0  # [VERIFIED: asimov_1.urdf line 772]
+  left_wrist_yaw_joint:
+    kp: 80.0
+    kd: 3.0
+    effort_limit: 12.0  # [VERIFIED: asimov_1.urdf line 792]
+
+  # Neck (CAN IDs 24-25 / Firmware 23-24)
+  neck_yaw_joint:
+    kp: 40.0   # [ASSUMED; typical range 40-150]
+    kd: 2.0    # [ASSUMED; typical range 2.0-5.0]
+    effort_limit: 12.0  # [ASSUMED matching arm small actuators]
+  neck_pitch_joint:
+    kp: 40.0   # [ASSUMED; typical range 40-150]
+    kd: 2.0    # [ASSUMED; typical range 2.0-5.0]
+    effort_limit: 12.0  # [ASSUMED matching arm small actuators]

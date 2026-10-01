@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Asimov 1 · Observability & Control Dashboard</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --card-border: #1f2937;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.2);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --purple: #8b5cf6;
+      --cyan: #06b6d4;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header .subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #1f2937;
+      border: 1px solid #374151;
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+    .badge.connected .badge-dot { background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .badge.disconnected .badge-dot { background: var(--danger); }
+    .badge.connecting .badge-dot { background: var(--warning); }
+
+    /* Top Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+    }
+    .stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 16px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Main Dashboard Layout */
+    .dashboard-layout {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 16px;
+    }
+    @media (max-width: 1200px) {
+      .dashboard-layout { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Joint Table */
+    .table-container {
+      overflow-x: auto;
+      max-height: 480px;
+      overflow-y: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+    th {
+      text-align: left;
+      padding: 6px 8px;
+      background: #1a2234;
+      color: var(--text-muted);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      border-bottom: 1px solid var(--card-border);
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+    td {
+      padding: 5px 8px;
+      border-bottom: 1px solid #1a2234;
+    }
+    tr:hover { background: rgba(255, 255, 255, 0.02); }
+    .highlight-ankle { background: rgba(59, 130, 246, 0.06); }
+    .bar-cell { width: 70px; }
+    .meter-bar {
+      height: 6px;
+      background: #1f2937;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 2px;
+    }
+    .meter-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      transition: width 0.1s ease;
+    }
+    .meter-fill.warning { background: var(--warning); }
+    .meter-fill.danger { background: var(--danger); }
+
+    /* Canvas Plot */
+    .canvas-container {
+      position: relative;
+      width: 100%;
+      height: 220px;
+      background: #0d121f;
+      border-radius: 6px;
+      border: 1px solid var(--card-border);
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Controls */
+    .control-group {
+      margin-bottom: 14px;
+    }
+    .control-group-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    button:hover { background: #374151; border-color: #4b5563; }
+    button.primary { background: var(--accent); border-color: #2563eb; }
+    button.primary:hover { background: #2563eb; }
+    button.success { background: #059669; border-color: #047857; }
+    button.success:hover { background: #047857; }
+    button.warning { background: #d97706; border-color: #b45309; }
+    button.danger { background: #dc2626; border-color: #b91c1c; }
+    button.active { outline: 2px solid var(--accent); }
+
+    .input-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 6px;
+    }
+    input, select {
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: var(--text);
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+    input[type="number"] { width: 70px; }
+    input[type="range"] { flex: 1; accent-color: var(--accent); }
+
+    .log-banner {
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: #1a2234;
+      border: 1px solid #2d3748;
+      color: var(--text-muted);
+      min-height: 28px;
+      display: flex;
+      align-items: center;
+    }
+
+    /* Ankle Card */
+    .ankle-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 11px;
+    }
+    .ankle-box {
+      background: #0d121f;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 8px;
+    }
+    .ankle-box h4 {
+      font-size: 11px;
+      color: var(--cyan);
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>
+        VIRTUAL ASIMOV 1
+        <span class="subtitle">Sim-Only High-Fidelity Observability & Control</span>
+      </h1>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span style="font-size:10px; color:#f87171; font-weight:600;">SIMULATION ONLY · NO HARDWARE EQUIVALENT</span>
+      <div id="wsBadge" class="badge connecting">
+        <span class="badge-dot"></span>
+        <span id="wsStatus">CONNECTING</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span class="stat-label">Mode</span>
+      <span id="statMode" class="stat-value" style="color:var(--cyan)">--</span>
+      <span id="statController" class="stat-sub">Arbiter: SDK</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Virtual Gantry</span>
+      <span id="statGantry" class="stat-value">--</span>
+      <span id="statGantrySub" class="stat-sub">Pelvis constraint</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Fault State</span>
+      <span id="statFault" class="stat-value" style="color:var(--success)">NORMAL</span>
+      <span id="statErrorFlags" class="stat-sub">flags: 0x0</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Real-Time Factor</span>
+      <span id="statRtf" class="stat-value">1.00x</span>
+      <span id="statSimTime" class="stat-sub">t = 0.00s</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Pelvis Height (Z)</span>
+      <span id="statPelvisZ" class="stat-value">0.000 m</span>
+      <span id="statPelvisTilt" class="stat-sub">Tilt: 0.0°</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Battery SoC</span>
+      <span id="statBattery" class="stat-value">100%</span>
+      <span id="statVoltage" class="stat-sub">48.0 V</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Left Foot</span>
+      <span id="statFootL" class="stat-value">--</span>
+      <span id="statForceL" class="stat-sub">Fz: 0.0 N</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Right Foot</span>
+      <span id="statFootR" class="stat-value">--</span>
+      <span id="statForceR" class="stat-sub">Fz: 0.0 N</span>
+    </div>
+  </div>
+
+  <!-- Dashboard Layout -->
+  <div class="dashboard-layout">
+
+    <!-- Left Column: 25-Joint Table & Ankles -->
+    <div>
+      <div class="card">
+        <div class="card-title">
+          <span>25-JOINT TELEMETRY (FIRMWARE & SIMULATION PARITY)</span>
+          <span style="font-size:10px; color:var(--text-muted);">Warning thresholds: >80% amber, >95% red</span>
+        </div>
+        <div class="table-container">
+          <table id="jointTable">
+            <thead>
+              <tr>
+                <th>Idx</th>
+                <th>Firmware Name</th>
+                <th>Sim Name</th>
+                <th style="text-align:right">Pos (rad)</th>
+                <th style="text-align:right">Target</th>
+                <th style="text-align:right">Err</th>
+                <th style="text-align:right">Vel (rad/s)</th>
+                <th style="text-align:right">Torque (N·m)</th>
+                <th>% Effort</th>
+                <th>% Range</th>
+              </tr>
+            </thead>
+            <tbody id="jointTableBody">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Ankle Mapping Inspection Box -->
+      <div class="card">
+        <div class="card-title">
+          <span>ANKLE KINEMATICS & DIFFERENTIAL MOTOR MAPPING (1:1 APPROXIMATION)</span>
+        </div>
+        <div class="ankle-grid">
+          <div class="ankle-box">
+            <h4>LEFT ANKLE (Orthogonal vs Wire Motors)</h4>
+            <div>Joint Pitch: <b id="ankLPitch">0.000</b> rad | Joint Roll: <b id="ankLRoll">0.000</b> rad</div>
+            <div>Motor A (pos/tau): <b id="ankLMotorA">0.000</b> rad | <b id="ankLTauA">0.0</b> N·m</div>
+            <div>Motor B (pos/tau): <b id="ankLMotorB">0.000</b> rad | <b id="ankLTauB">0.0</b> N·m</div>
+          </div>
+          <div class="ankle-box">
+            <h4>RIGHT ANKLE (Orthogonal vs Wire Motors)</h4>
+            <div>Joint Pitch: <b id="ankRPitch">0.000</b> rad | Joint Roll: <b id="ankRRoll">0.000</b> rad</div>
+            <div>Motor A (pos/tau): <b id="ankRMotorA">0.000</b> rad | <b id="ankRTauA">0.0</b> N·m</div>
+            <div>Motor B (pos/tau): <b id="ankRMotorB">0.000</b> rad | <b id="ankRTauB">0.0</b> N·m</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Rolling Plot & Control Panel -->
+    <div>
+      <!-- Rolling Plot Card -->
+      <div class="card">
+        <div class="card-title">
+          <span>REAL-TIME ROLLING PLOT (LAST 10s @ 50Hz)</span>
+          <select id="plotSelect">
+            <option value="pelvis">Pelvis Z & Tilt</option>
+            <option value="feet">Foot Normal Forces (L/R)</option>
+            <option value="joint_pos">Joint Pos vs Target</option>
+            <option value="joint_torque">Joint Torque vs Limit</option>
+            <option value="vel">Pelvis Linear Velocities</option>
+          </select>
+        </div>
+        <div id="jointPickerRow" style="display:none; margin-bottom:8px;">
+          <label style="font-size:11px; color:var(--text-muted)">Select Joint: </label>
+          <select id="jointPickerSelect"></select>
+        </div>
+        <div class="canvas-container">
+          <canvas id="plotCanvas"></canvas>
+        </div>
+        <div id="plotLegend" style="font-size:10px; color:var(--text-muted); margin-top:6px; display:flex; gap:12px;"></div>
+      </div>
+
+      <!-- Control Panel Card -->
+      <div class="card">
+        <div class="card-title">
+          <span>SIMULATION CONTROL PANEL (:8852 API)</span>
+        </div>
+
+        <!-- Gantry Control -->
+        <div class="control-group">
+          <div class="control-group-title">Virtual Gantry</div>
+          <div class="btn-row">
+            <button id="btnGantryOn" onclick="sendControl({command:'gantry', state:'on'})">Engage (Lock Pelvis)</button>
+            <button id="btnGantryOff" onclick="sendControl({command:'gantry', state:'off'})">Release (Free Motion)</button>
+          </div>
+        </div>
+
+        <!-- Disturbance Push -->
+        <div class="control-group">
+          <div class="control-group-title">Apply Disturbance Push (Pelvis)</div>
+          <div class="btn-row">
+            <button onclick="applyPresetPush('x', 60)">Sagittal 60N</button>
+            <button onclick="applyPresetPush('x', 120)">Sagittal 120N (Trip)</button>
+            <button onclick="applyPresetPush('y', 80)">Lateral 80N</button>
+            <button onclick="applyPresetPush('y', 160)">Lateral 160N (Trip)</button>
+          </div>
+          <div class="input-row">
+            <select id="pushDir">
+              <option value="x">X (Sagittal)</option>
+              <option value="y">Y (Lateral)</option>
+              <option value="z">Z (Vertical)</option>
+            </select>
+            <input type="number" id="pushForce" value="40" placeholder="Force (N)">
+            <span style="font-size:11px; color:var(--text-muted)">N for</span>
+            <input type="number" id="pushDur" value="0.10" step="0.05" placeholder="Dur (s)">
+            <span style="font-size:11px; color:var(--text-muted)">s</span>
+            <button class="primary" onclick="applyCustomPush()">Push</button>
+          </div>
+        </div>
+
+        <!-- Fault Injection -->
+        <div class="control-group">
+          <div class="control-group-title">Safety & Fault Injection</div>
+          <div class="btn-row">
+            <button class="danger" onclick="sendControl({command:'inject', fault:'fall'})">Inject Fall</button>
+            <button class="warning" onclick="sendControl({command:'inject', fault:'overtemp', temp:85.0})">Inject Overtemp (85°C)</button>
+            <button class="warning" onclick="sendControl({command:'inject', fault:'can'})">Inject CAN Fault</button>
+          </div>
+        </div>
+
+        <!-- Virtual Battery -->
+        <div class="control-group">
+          <div class="control-group-title">Virtual Battery Control (PLACEHOLDER)</div>
+          <div class="input-row">
+            <input type="range" id="batterySlider" min="0" max="100" value="100" oninput="document.getElementById('batteryVal').innerText = this.value + '%'">
+            <span id="batteryVal" style="font-size:11px; width:45px; text-align:right;">100%</span>
+            <button onclick="setBatteryFromSlider()">Set SoC</button>
+          </div>
+          <div class="btn-row" style="margin-top:6px;">
+            <button onclick="sendControl({command:'set_battery', soc:100.0})">100%</button>
+            <button onclick="sendControl({command:'set_battery', soc:50.0})">50%</button>
+            <button onclick="sendControl({command:'set_battery', soc:15.0})">15% (Trip Warning)</button>
+            <button onclick="sendControl({command:'set_battery', soc:5.0})">5% (Critical)</button>
+          </div>
+        </div>
+
+        <!-- System Restart -->
+        <div class="control-group">
+          <div class="control-group-title">Firmware & Physics Restart</div>
+          <button class="success" style="width:100%" onclick="sendControl({command:'restart'})">Virtual Restart (Clear Latches & Reset)</button>
+        </div>
+
+        <!-- Response Banner -->
+        <div id="logBanner" class="log-banner">Ready. System initialized.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // State buffer for 10-second rolling plots (500 samples @ 50 Hz)
+    const MAX_SAMPLES = 500;
+    const history = {
+      t: [],
+      pelvisZ: [],
+      pelvisTilt: [],
+      footForceL: [],
+      footForceR: [],
+      velX: [],
+      velY: [],
+      velZ: [],
+      jointPos: {},
+      jointTarget: {},
+      jointTorque: {},
+    };
+
+    let latestFrame = null;
+    let ws = null;
+    let reconnectTimer = null;
+    let canvas, ctx;
+
+    // Joint info
+    const jointNames = [
+      "L_Hip_Pitch", "L_Hip_Roll", "L_Hip_Yaw", "L_Knee", "L_Ankle_A", "L_Ankle_B",
+      "R_Hip_Pitch", "R_Hip_Roll", "R_Hip_Yaw", "R_Knee", "R_Ankle_A", "R_Ankle_B",
+      "L_Shoulder_Pitch", "L_Shoulder_Roll", "L_Shoulder_Yaw", "L_Elbow", "L_Wrist_Yaw",
+      "R_Shoulder_Pitch", "R_Shoulder_Roll", "R_Shoulder_Yaw", "R_Elbow", "R_Wrist_Yaw",
+      "Waist_Yaw", "Neck_Yaw", "Neck_Pitch"
+    ];
+
+    function init() {
+      canvas = document.getElementById("plotCanvas");
+      ctx = canvas.getContext("2d");
+
+      // Populate joint picker
+      const picker = document.getElementById("jointPickerSelect");
+      jointNames.forEach((name, idx) => {
+        const opt = document.createElement("option");
+        opt.value = idx;
+        opt.text = `${idx}: ${name}`;
+        picker.appendChild(opt);
+        history.jointPos[idx] = [];
+        history.jointTarget[idx] = [];
+        history.jointTorque[idx] = [];
+      });
+
+      document.getElementById("plotSelect").addEventListener("change", (e) => {
+        const showPicker = e.target.value === "joint_pos" || e.target.value === "joint_torque";
+        document.getElementById("jointPickerRow").style.display = showPicker ? "block" : "none";
+      });
+
+      connectWs();
+      window.requestAnimationFrame(renderLoop);
+    }
+
+    function connectWs() {
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const host = window.location.hostname || "127.0.0.1";
+      const wsUrl = `${proto}//${host}:8854`;
+
+      updateBadge("connecting", "CONNECTING");
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (err) {
+        fallbackPolling();
+        return;
+      }
+
+      ws.onopen = () => {
+        updateBadge("connected", "LIVE 50Hz");
+        logMessage("Connected to sim-only ground truth stream.");
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          const data = JSON.parse(evt.data);
+          onGroundTruthFrame(data);
+        } catch (e) {}
+      };
+
+      ws.onerror = () => {
+        updateBadge("disconnected", "WS ERROR");
+      };
+
+      ws.onclose = () => {
+        updateBadge("disconnected", "RETRYING");
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connectWs, 2000);
+      };
+    }
+
+    function updateBadge(state, text) {
+      const b = document.getElementById("wsBadge");
+      b.className = `badge ${state}`;
+      document.getElementById("wsStatus").innerText = text;
+    }
+
+    function onGroundTruthFrame(data) {
+      latestFrame = data;
+      const simTime = data.sim_time || 0;
+
+      // Stats
+      document.getElementById("statMode").innerText = data.mode || "--";
+      document.getElementById("statGantry").innerText = data.gantry_active ? "LOCKED" : "FREE";
+      document.getElementById("statGantry").style.color = data.gantry_active ? "var(--warning)" : "var(--success)";
+
+      const fault = data.fault_state || {};
+      if (fault.latched) {
+        document.getElementById("statFault").innerText = "FAULT LATCHED";
+        document.getElementById("statFault").style.color = "var(--danger)";
+      } else {
+        document.getElementById("statFault").innerText = "NORMAL";
+        document.getElementById("statFault").style.color = "var(--success)";
+      }
+      document.getElementById("statErrorFlags").innerText = `flags: 0x${(fault.error_flags || 0).toString(16)}`;
+
+      document.getElementById("statRtf").innerText = `${(data.real_time_factor || 1.0).toFixed(2)}x`;
+      document.getElementById("statSimTime").innerText = `t = ${simTime.toFixed(2)}s`;
+
+      const pelvis = data.pelvis || {};
+      const pos = pelvis.pos || [0, 0, 0];
+      document.getElementById("statPelvisZ").innerText = `${pos[2].toFixed(3)} m`;
+      document.getElementById("statPelvisTilt").innerText = `Tilt: ${(pelvis.tilt_deg || 0).toFixed(1)}°`;
+
+      const battery = data.battery || {};
+      document.getElementById("statBattery").innerText = `${(battery.soc_percent || 100).toFixed(0)}%`;
+      document.getElementById("statVoltage").innerText = `${(battery.voltage_v || 48).toFixed(1)} V`;
+
+      const contacts = data.contacts || {};
+      const fL = contacts.left_foot || {};
+      const fR = contacts.right_foot || {};
+      document.getElementById("statFootL").innerText = fL.contact ? "GROUND" : "AIR";
+      document.getElementById("statFootL").style.color = fL.contact ? "var(--success)" : "var(--text-muted)";
+      document.getElementById("statForceL").innerText = `Fz: ${(fL.normal_force || 0).toFixed(1)} N`;
+
+      document.getElementById("statFootR").innerText = fR.contact ? "GROUND" : "AIR";
+      document.getElementById("statFootR").style.color = fR.contact ? "var(--success)" : "var(--text-muted)";
+      document.getElementById("statForceR").innerText = `Fz: ${(fR.normal_force || 0).toFixed(1)} N`;
+
+      // Ankles Box
+      const ankles = data.ankles || {};
+      const aL = ankles.left || {};
+      const aR = ankles.right || {};
+      document.getElementById("ankLPitch").innerText = (aL.pitch_rad || 0).toFixed(3);
+      document.getElementById("ankLRoll").innerText = (aL.roll_rad || 0).toFixed(3);
+      document.getElementById("ankLMotorA").innerText = (aL.motor_a_rad || 0).toFixed(3);
+      document.getElementById("ankLMotorB").innerText = (aL.motor_b_rad || 0).toFixed(3);
+      document.getElementById("ankLTauA").innerText = (aL.motor_a_torque_nm || 0).toFixed(1);
+      document.getElementById("ankLTauB").innerText = (aL.motor_b_torque_nm || 0).toFixed(1);
+
+      document.getElementById("ankRPitch").innerText = (aR.pitch_rad || 0).toFixed(3);
+      document.getElementById("ankRRoll").innerText = (aR.roll_rad || 0).toFixed(3);
+      document.getElementById("ankRMotorA").innerText = (aR.motor_a_rad || 0).toFixed(3);
+      document.getElementById("ankRMotorB").innerText = (aR.motor_b_rad || 0).toFixed(3);
+      document.getElementById("ankRTauA").innerText = (aR.motor_a_torque_nm || 0).toFixed(1);
+      document.getElementById("ankRTauB").innerText = (aR.motor_b_torque_nm || 0).toFixed(1);
+
+      // Append to rolling history
+      pushHistory(simTime, pos[2], pelvis.tilt_deg || 0, fL.normal_force || 0, fR.normal_force || 0, pelvis.lin_vel || [0,0,0], data.joints || []);
+
+      // Update Joint Table
+      updateJointTable(data.joints || []);
+    }
+
+    function pushHistory(t, z, tilt, fL, fR, linVel, joints) {
+      history.t.push(t);
+      history.pelvisZ.push(z);
+      history.pelvisTilt.push(tilt);
+      history.footForceL.push(fL);
+      history.footForceR.push(fR);
+      history.velX.push(linVel[0] || 0);
+      history.velY.push(linVel[1] || 0);
+      history.velZ.push(linVel[2] || 0);
+
+      joints.forEach((j) => {
+        const idx = j.index;
+        if (history.jointPos[idx]) {
+          history.jointPos[idx].push(j.pos);
+          history.jointTarget[idx].push(j.target);
+          history.jointTorque[idx].push(j.torque);
+        }
+      });
+
+      if (history.t.length > MAX_SAMPLES) {
+        history.t.shift();
+        history.pelvisZ.shift();
+        history.pelvisTilt.shift();
+        history.footForceL.shift();
+        history.footForceR.shift();
+        history.velX.shift();
+        history.velY.shift();
+        history.velZ.shift();
+        for (let k in history.jointPos) {
+          history.jointPos[k].shift();
+          history.jointTarget[k].shift();
+          history.jointTorque[k].shift();
+        }
+      }
+    }
+
+    function updateJointTable(joints) {
+      const tbody = document.getElementById("jointTableBody");
+      if (tbody.children.length !== joints.length) {
+        // Build rows once
+        tbody.innerHTML = "";
+        joints.forEach((j) => {
+          const isAnkle = [4, 5, 10, 11].includes(j.index);
+          const tr = document.createElement("tr");
+          tr.id = `jrow_${j.index}`;
+          if (isAnkle) tr.className = "highlight-ankle";
+          tr.innerHTML = `
+            <td>${j.index}</td>
+            <td style="font-weight:600">${j.firmware_name}</td>
+            <td style="color:var(--text-muted)">${j.sim_name}</td>
+            <td id="jpos_${j.index}" style="text-align:right">--</td>
+            <td id="jtgt_${j.index}" style="text-align:right; color:var(--cyan)">--</td>
+            <td id="jerr_${j.index}" style="text-align:right">--</td>
+            <td id="jvel_${j.index}" style="text-align:right">--</td>
+            <td id="jtau_${j.index}" style="text-align:right; font-weight:600">--</td>
+            <td class="bar-cell">
+              <span id="jeftp_${j.index}" style="font-size:10px">0%</span>
+              <div class="meter-bar"><div id="jefb_${j.index}" class="meter-fill" style="width:0%"></div></div>
+            </td>
+            <td class="bar-cell">
+              <span id="jrgp_${j.index}" style="font-size:10px">50%</span>
+              <div class="meter-bar"><div id="jrgb_${j.index}" class="meter-fill" style="width:50%; background:var(--purple)"></div></div>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      // Update values
+      joints.forEach((j) => {
+        const i = j.index;
+        const posEl = document.getElementById(`jpos_${i}`);
+        const tgtEl = document.getElementById(`jtgt_${i}`);
+        const errEl = document.getElementById(`jerr_${i}`);
+        const velEl = document.getElementById(`jvel_${i}`);
+        const tauEl = document.getElementById(`jtau_${i}`);
+        const eftpEl = document.getElementById(`jeftp_${i}`);
+        const efbEl = document.getElementById(`jefb_${i}`);
+        const rgpEl = document.getElementById(`jrgp_${i}`);
+        const rgbEl = document.getElementById(`jrgb_${i}`);
+
+        if (posEl) posEl.innerText = j.pos.toFixed(3);
+        if (tgtEl) tgtEl.innerText = j.target.toFixed(3);
+        if (errEl) errEl.innerText = j.error.toFixed(3);
+        if (velEl) velEl.innerText = j.vel.toFixed(2);
+        if (tauEl) tauEl.innerText = j.torque.toFixed(1);
+
+        const pctEffort = Math.min(100, Math.abs(j.torque_pct_effort || 0));
+        if (eftpEl) eftpEl.innerText = `${pctEffort.toFixed(0)}%`;
+        if (efbEl) {
+          efbEl.style.width = `${pctEffort}%`;
+          efbEl.className = pctEffort > 95 ? "meter-fill danger" : (pctEffort > 80 ? "meter-fill warning" : "meter-fill");
+        }
+
+        const pctRange = Math.max(0, Math.min(100, j.pos_pct_range || 50));
+        if (rgpEl) rgpEl.innerText = `${pctRange.toFixed(0)}%`;
+        if (rgbEl) {
+          rgbEl.style.width = `${pctRange}%`;
+          rgbEl.className = (pctRange > 95 || pctRange < 5) ? "meter-fill warning" : "meter-fill";
+        }
+      });
+    }
+
+    // 60FPS Canvas Drawing Loop
+    function renderLoop() {
+      renderPlot();
+      window.requestAnimationFrame(renderLoop);
+    }
+
+    function renderPlot() {
+      if (!ctx || !canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      if (canvas.width !== rect.width * window.devicePixelRatio || canvas.height !== rect.height * window.devicePixelRatio) {
+        canvas.width = rect.width * window.devicePixelRatio;
+        canvas.height = rect.height * window.devicePixelRatio;
+      }
+
+      ctx.save();
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+      const w = rect.width;
+      const h = rect.height;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // Draw dark grid
+      ctx.strokeStyle = "#1f2937";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < w; x += 60) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      }
+      for (let y = 0; y < h; y += 35) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+
+      const mode = document.getElementById("plotSelect").value;
+      const legend = document.getElementById("plotLegend");
+
+      if (history.t.length < 2) {
+        ctx.restore();
+        return;
+      }
+
+      if (mode === "pelvis") {
+        legend.innerHTML = `
+          <span style="color:var(--cyan)">■ Pelvis Height Z (m)</span>
+          <span style="color:var(--warning)">■ Pelvis Tilt (deg)</span>
+        `;
+        drawSeries(history.pelvisZ, 0.4, 0.8, "var(--cyan)", 2);
+        drawSeries(history.pelvisTilt, 0, 45, "var(--warning)", 1.5);
+      } else if (mode === "feet") {
+        legend.innerHTML = `
+          <span style="color:var(--success)">■ Left Foot Fz (N)</span>
+          <span style="color:var(--purple)">■ Right Foot Fz (N)</span>
+        `;
+        drawSeries(history.footForceL, 0, 250, "var(--success)", 2);
+        drawSeries(history.footForceR, 0, 250, "var(--purple)", 2);
+      } else if (mode === "joint_pos") {
+        const jidx = parseInt(document.getElementById("jointPickerSelect").value || "0");
+        legend.innerHTML = `
+          <span style="color:var(--cyan)">■ ${jointNames[jidx]} Target (rad)</span>
+          <span style="color:var(--success)">■ Actual Pos (rad)</span>
+        `;
+        const pos = history.jointPos[jidx] || [];
+        const tgt = history.jointTarget[jidx] || [];
+        const minVal = -1.6, maxVal = 1.6;
+        drawSeries(tgt, minVal, maxVal, "var(--cyan)", 1.5, [4, 4]);
+        drawSeries(pos, minVal, maxVal, "var(--success)", 2);
+      } else if (mode === "joint_torque") {
+        const jidx = parseInt(document.getElementById("jointPickerSelect").value || "0");
+        legend.innerHTML = `
+          <span style="color:var(--danger)">■ ${jointNames[jidx]} Torque (N·m)</span>
+        `;
+        const tau = history.jointTorque[jidx] || [];
+        drawSeries(tau, -50, 50, "var(--danger)", 2);
+      } else if (mode === "vel") {
+        legend.innerHTML = `
+          <span style="color:var(--cyan)">■ Vx</span>
+          <span style="color:var(--success)">■ Vy</span>
+          <span style="color:var(--warning)">■ Vz</span>
+        `;
+        drawSeries(history.velX, -1.0, 1.0, "var(--cyan)", 1.5);
+        drawSeries(history.velY, -1.0, 1.0, "var(--success)", 1.5);
+        drawSeries(history.velZ, -1.0, 1.0, "var(--warning)", 1.5);
+      }
+
+      ctx.restore();
+    }
+
+    function drawSeries(series, yMin, yMax, color, lineWidth = 1.5, dash = []) {
+      if (!series || series.length < 2) return;
+      const w = canvas.getBoundingClientRect().width;
+      const h = canvas.getBoundingClientRect().height;
+      const n = series.length;
+
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth;
+      ctx.setLineDash(dash);
+
+      for (let i = 0; i < n; i++) {
+        const x = (i / (MAX_SAMPLES - 1)) * w;
+        const normY = (series[i] - yMin) / (yMax - yMin);
+        const y = h - Math.max(0, Math.min(h, normY * h));
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // HTTP Control API Calls (:8852/control)
+    function sendControl(payload) {
+      const banner = document.getElementById("logBanner");
+      banner.innerText = `Sending: ${JSON.stringify(payload)}...`;
+      fetch("/control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(data => {
+        banner.innerText = `Response: ${JSON.stringify(data)}`;
+        banner.style.color = data.status === "ok" ? "var(--success)" : "var(--danger)";
+      })
+      .catch(err => {
+        banner.innerText = `Error: ${err.message}`;
+        banner.style.color = "var(--danger)";
+      });
+    }
+
+    function applyPresetPush(dir, force) {
+      sendControl({ command: "push", dir: dir, force: force, duration: 0.1 });
+    }
+
+    function applyCustomPush() {
+      const dir = document.getElementById("pushDir").value;
+      const force = parseFloat(document.getElementById("pushForce").value || "40");
+      const dur = parseFloat(document.getElementById("pushDur").value || "0.1");
+      sendControl({ command: "push", dir: dir, force: force, duration: dur });
+    }
+
+    function setBatteryFromSlider() {
+      const val = parseFloat(document.getElementById("batterySlider").value);
+      sendControl({ command: "set_battery", soc: val });
+    }
+
+    function logMessage(msg) {
+      document.getElementById("logBanner").innerText = msg;
+    }
+
+    window.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>

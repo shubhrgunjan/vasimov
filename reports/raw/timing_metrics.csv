@@ -1,0 +1,4 @@
+mode,packets_count,total_wall_s,mean_rate_hz,jitter_ms,min_interval_ms,max_interval_ms,sdk_observed_hz,real_time_factor
+fast,601,60.05,10.00,2.95,67.73,128.91,10.00,34.50
+realtime,601,60.09,10.00,2.37,89.25,108.53,10.00,1.00
+realtime_viewer,600,60.02,10.00,2.24,95.07,104.97,10.00,1.00
