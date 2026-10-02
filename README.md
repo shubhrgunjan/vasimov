@@ -20,39 +20,90 @@ Virtual Asimov 1 is an open local robotics development and simulation platform t
 
 ---
 
-## 2. Quickstart & Installation
+## 2. Quickstart & Installation (Linux, macOS, Windows)
 
-### A. Environment Setup
+Virtual Asimov 1 is fully OS-independent and runs natively on **Linux**, **macOS** (Apple Silicon & Intel), and **Windows** (x86_64 & ARM64).
+
+### A. Universal Setup (All Platforms)
+
+If you have Python 3.10+ installed, you can run the universal setup script from any terminal:
+
 ```bash
-# Automatically sets up Python virtualenv and dependencies (MuJoCo, ONNX Runtime, PyYAML, etc.)
-bash setup.sh
+python setup.py
 ```
+*(On systems with multiple Python versions, use `python3 setup.py`)*.
 
-### B. Launching the Prototype
+---
 
-#### 1. Interactive Terminal Console (Default CLI):
-Launch the standard terminal console:
-```bash
-./run_sim.sh
-```
-*(On headless servers or without a desktop display, run `./run_sim.sh --no-viewer`)*.
+### B. Platform-Specific Setup & Launch
 
-#### 2. Live Web Robot Dashboard:
-Launch the simulator with the operator web dashboard:
-```bash
-./run_dashboard.sh
-```
-*(or `./run_sim.sh --web`)*.
+#### 🐧 Linux (Ubuntu/Debian, Fedora, Arch)
 
-Open your browser at:
-```text
-http://127.0.0.1:8852
-```
-WebSocket telemetry stream connects automatically at `ws://127.0.0.1:8854`.
-On headless servers, launch with:
-```bash
-./run_dashboard.sh --no-viewer
-```
+1. **Environment Setup**:
+   ```bash
+   bash setup.sh
+   # or: python3 setup.py
+   ```
+2. **Launch Interactive Console (Default CLI)**:
+   ```bash
+   ./run_sim.sh
+   # On headless servers without X11: ./run_sim.sh --no-viewer
+   ```
+3. **Launch Live Web Robot Dashboard**:
+   ```bash
+   ./run_dashboard.sh
+   # or: ./run_sim.sh --web
+   # Browser UI: http://127.0.0.1:8852 (WebSocket: ws://127.0.0.1:8854)
+   ```
+
+#### 🍏 macOS (Apple Silicon M1/M2/M3/M4 & Intel)
+
+1. **Environment Setup**:
+   ```bash
+   bash setup.sh
+   # or: python3 setup.py
+   ```
+2. **Launch Interactive Console**:
+   ```bash
+   ./run_sim.sh
+   # or: .venv/bin/python -m tools.sim_console
+   ```
+3. **Launch Live Web Robot Dashboard**:
+   ```bash
+   ./run_dashboard.sh
+   # Browser UI: http://127.0.0.1:8852
+   ```
+*(Note for macOS Native 3D Viewer: If running interactive passive 3D viewer directly from terminal, the setup script automatically generates `.venv/bin/mjpython` for macOS Cocoa main-thread compatibility)*.
+
+#### 🪟 Windows (Command Prompt, PowerShell, WSL2)
+
+1. **Environment Setup**:
+   - **Command Prompt (`cmd.exe`)**:
+     ```cmd
+     setup.bat
+     ```
+   - **PowerShell**:
+     ```powershell
+     .\setup.ps1
+     ```
+   - **Universal Python**:
+     ```cmd
+     python setup.py
+     ```
+2. **Launch Interactive Console**:
+   ```cmd
+   run_sim.bat
+   ```
+   *(or `.\.venv\Scripts\python -m tools.sim_console`)*.
+3. **Launch Live Web Robot Dashboard**:
+   ```cmd
+   run_dashboard.bat
+   ```
+   *(or `.\.venv\Scripts\python -m tools.sim_console --web`)*.  
+   Open your browser at:
+   ```text
+   http://127.0.0.1:8852
+   ```
 
 ---
 
