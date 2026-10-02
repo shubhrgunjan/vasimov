@@ -29,15 +29,71 @@ bash setup.sh
 ```
 
 ### B. Launching the Prototype
-Launch the interactive console with one command:
+
+#### 1. Interactive Terminal Console (Default CLI):
+Launch the standard terminal console:
 ```bash
 ./run_sim.sh
 ```
 *(On headless servers or without a desktop display, run `./run_sim.sh --no-viewer`)*.
 
+#### 2. Live Web Robot Dashboard:
+Launch the simulator with the operator web dashboard:
+```bash
+./run_dashboard.sh
+```
+*(or `./run_sim.sh --web`)*.
+
+Open your browser at:
+```text
+http://127.0.0.1:8852
+```
+WebSocket telemetry stream connects automatically at `ws://127.0.0.1:8854`.
+On headless servers, launch with:
+```bash
+./run_dashboard.sh --no-viewer
+```
+
 ---
 
-## 3. How to Control the Robot
+## 3. Web Dashboard Features & Workspaces
+
+The web dashboard is an engineering workstation interface connected to the single MuJoCo physics source of truth:
+
+- **LIVE Workspace**:
+  - Live robot viewport rendering from real MuJoCo camera feeds.
+  - **SOLID | X-RAY** toggle displaying internal joint/actuator linkages and contact forces.
+  - Base Pose ($X, Y, Z$, Roll, Pitch, Yaw), Velocity ($V_x, V_y, \omega_z$), and active foot contact forces ($F_z$).
+  - Primary controls: `STAND`, `WALK`, `STOP`, `RESET`, `PAUSE`, `STEP`.
+  - Velocity sliders, interactive D-Pad, and keyboard shortcuts (`W`, `S`, `A`, `D`, `Q`, `E`, `Space`, `P`, `R`).
+  - Event-driven dataflow pipeline: `INPUT → OBSERVATION → POLICY → ACTION → TARGET → ACTUATOR → MUJOCO → TELEMETRY`.
+- **CAMERAS Workspace**:
+  - Real-time grid of all real MuJoCo model cameras (`front_camera`, `side_camera`, `back_camera`, `direct_side_camera`, `direct_behind_camera`) plus interactive `viewer_camera`.
+  - Timestamp, sequence number, and simulation time synchronization overlay.
+- **MOTORS Workspace (25 Actuators)**:
+  - Complete inventory of all 25 actuated robot joints.
+  - Filter by group: `All`, `Legs`, `Arms`, `Waist`, `Active`, `Near limit`, `High torque`.
+  - Real-time position vs. target mini-trace, torque, velocity, and effort percentage.
+  - Manual target adjustment controls: `[-0.05]`, `[-0.01]`, `[+0.01]`, `[+0.05]`.
+- **SENSORS Workspace (84 MuJoCo Sensors)**:
+  - Runtime enumeration of all 84 sensors from the loaded model.
+  - Categorized into `IMU`, `FORCE`, `CONTACT`, `JOINT`, `OTHER` with live vector inspection.
+- **POLICY Workspace (78 in → 23 out)**:
+  - Complete 78-dimensional observation vector grouped by contract: base gyro, projected gravity, velocity command, joint positions, joint velocities, previous actions.
+  - Complete 23-dimensional policy action outputs with $q_{des} = q_{default} + 0.25 \cdot a$ scaling.
+- **ENVIRONMENT Workspace**:
+  - Switch between presets (`flat`, `friction_low`, `friction_high`, `heavy_robot`, `light_robot`, `obstacle_basic`, `terrain_basic`).
+  - Disturbance injection: pelvis push ($F_x, F_y, F_z$).
+- **RECORD & REPLAY Workspace**:
+  - Flight data session recording with live timer (`REC mm:ss`).
+  - Saved session browser and offline replay player.
+- **RAW Workspace**:
+  - Syntax-colored JSON inspection of the canonical `TelemetryFrame`.
+  - Copy and download raw telemetry snapshots.
+
+---
+
+## 4. How to Control the Robot (Console & Shortcuts)
 
 When the console starts, you are presented with the interactive prompt:
 
@@ -83,7 +139,7 @@ walk 0.3                # Robot walks using ONNX policy while left knee holds 0.
 
 ---
 
-## 4. How to Inspect Telemetry
+## 5. How to Inspect Telemetry
 
 The simulator exposes genuine physics quantities from MuJoCo (no fake or fabricated data):
 
@@ -102,7 +158,7 @@ telemetry rate <Hz>     # Set periodic background output rate
 
 ---
 
-## 5. How to Load Environments
+## 6. How to Load Environments
 
 Easily switch simulation scenarios at runtime:
 
@@ -116,7 +172,7 @@ reset                   # Deterministically reset robot pose and simulation
 
 ---
 
-## 6. How to Record and Replay
+## 7. How to Record and Replay
 
 Capture flight sessions for analysis, machine learning, or regression testing:
 
@@ -132,10 +188,12 @@ replay my_walk          # Inspect flight recording metadata and verify duration
 
 ---
 
-## 7. Control & Data Pipeline Architecture
+## 8. Control & Data Pipeline Architecture
 
 ```text
-User command (CLI / Keyboard)
+User command (Web Dashboard / Keyboard / CLI)
+     ↓
+Web Control Gateway (Lifecycle: Input → Parsed → Validated → Accepted/Rejected → Applied)
      ↓
 Command validation & clipping (vx: [-0.6, 0.8], vy: [-0.5, 0.5], wz: [-0.8, 0.8])
      ↓
@@ -157,14 +215,16 @@ MuJoCo physics step (200 Hz, dt=0.005s)
      ↓
 Ground truth telemetry extraction (base, IMU, joints, foot contacts & forces)
      ↓
-Terminal Dashboard / CSV / JSON Replay
+Canonical TelemetryFrame (JSON) & Offscreen Camera Streamer (~25 FPS JPEG)
+     ↓
+Web Dashboard (WebSocket: ws://127.0.0.1:8854, HTTP: http://127.0.0.1:8852)
 ```
 
 Detailed file mappings and transformations are documented in [docs/pipeline.md](file:///home/shubhr/Shubhr/Projects/vasimov/docs/pipeline.md).
 
 ---
 
-## 8. Presentation Script
+## 9. Presentation Script
 
 A complete 16-step reproducible presentation walkthrough is available in [docs/demo.md](file:///home/shubhr/Shubhr/Projects/vasimov/docs/demo.md).
 
@@ -176,27 +236,41 @@ To run an automated end-to-end acceptance demo:
 
 ---
 
-## 9. Running Tests
+## 10. Running Tests
 
-Run the complete 66-test verification suite with fault handler:
+Run the complete 77-test verification suite with fault handler:
 
 ```bash
 .venv/bin/python -X faulthandler -m unittest discover -s tests -v
 ```
 
-All 66 tests pass cleanly covering:
+All 77 tests pass cleanly covering:
+- Unit & integration tests for web dashboard gateway, REST/WebSocket APIs, offscreen camera rendering, and command lifecycle.
 - Unit & integration tests for console parsing, policy I/O, manual/hybrid joint modes, telemetry, deterministic reset, environment presets, and recording/replay roundtrips.
 - Existing Step 5 tests: motor model layers, differential ankle mapping, wire protocol enums, zero-I/O EdgeCore state machine, and unmodified `menlo-sdk` integration.
 
 ---
 
-## 10. Repository Structure
+## 11. Repository Structure
 
 ```text
 vasimov/
 ├── run_sim.sh                 # One-command executable console launcher
+├── run_dashboard.sh           # One-command executable live web dashboard launcher
+├── web/                       # Web Dashboard Layer (local-first operator workstation)
+│   ├── server/
+│   │   ├── gateway.py         # HTTP REST/snapshot & WebSocket telemetry server
+│   │   ├── canonical_frame.py # Single-source-of-truth canonical TelemetryFrame builder
+│   │   ├── camera_streamer.py # Offscreen MuJoCo camera renderer & JPEG encoder
+│   │   ├── control_handler.py # Command lifecycle validator & dispatcher
+│   │   └── replay_manager.py  # Session recording scanner & replay player
+│   └── client/                # Single-page technical operator interface
+│       ├── index.html         # Engineering workstation UI
+│       ├── css/dashboard.css  # Technical instrumentation styling (dark neutral)
+│       └── js/                # Modular workspaces (live, cameras, motors, sensors, policy, env, raw)
 ├── tools/
 │   ├── sim_console.py         # Full interactive CLI console & simulation runner
+│   ├── verify_dashboard_e2e.py# End-to-end 31-step dashboard acceptance runner
 │   ├── benchmark_timing.py    # Real-time factor (RTF) timing benchmarks
 │   ├── compare_pd_actuators.py# Actuator parity tests
 │   └── test_stepping_matrix.py# Stepping gait verification
@@ -223,14 +297,14 @@ vasimov/
 │   ├── gains.yaml             # PD gains, effort limits, and official standing pose
 │   ├── joints.yaml            # Master convention table for firmware joints 0–24
 │   └── motors.yaml            # Motor model layer toggles and parameters (L0–L4)
-├── tests/                     # 66 comprehensive unit and integration tests
+├── tests/                     # 77 comprehensive unit and integration tests
 ├── FIDELITY.md                # Provenance & fidelity audit for every command and field
 └── reports/raw/               # Raw benchmarks, flight data recordings, and test logs
 ```
 
 ---
 
-## 11. Extension Hooks for Future Work
+## 12. Extension Hooks for Future Work
 
 The system's modular architecture enables drop-in extensions without rewriting the simulator:
 - **Vision-Language-Action (VLM)**: Connect external planners to `console.core.command_velocity()` or trajectory endpoints.

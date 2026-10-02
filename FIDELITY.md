@@ -134,3 +134,16 @@ Per project requirements, every item is strictly labeled into one of four catego
 | 23 | `Neck_Yaw` | `neck_yaw_joint` | 12.0 | 9.32 | 40.0 | 2.0 | ASSUMED (Derived neck joints) |
 | 24 | `Neck_Pitch` | `neck_pitch_joint` | 12.0 | 9.32 | 40.0 | 2.0 | ASSUMED (Derived neck joints) |
 
+---
+
+## 7. Web Dashboard & Camera System Fidelity
+
+| System Component | Classification | Description & Provenance |
+| :--- | :--- | :--- |
+| `front_camera`, `side_camera`, `back_camera`, `direct_side_camera`, `direct_behind_camera` | **`REAL-EQUIVALENT`** | Genuine offscreen rendering from the loaded MuJoCo model's cameras (`m.ncam = 5`). Rendered via offscreen `mujoco.Renderer` in background worker thread (~25 FPS JPEG), directly bound to simulation state. |
+| `viewer_camera` | **`APPROXIMATE`** | Free orbit/tracking camera orbiting the pelvis link. Clearly labeled as a viewer tool, not a physical robot sensor. |
+| Canonical `TelemetryFrame` | **`REAL-EQUIVALENT`** | Derived directly from active MuJoCo physics step and `EdgeCore`. Broadcasts at ~25 Hz over WebSocket (`:8854`). Contains all 25 actuators, 84 sensors, base pose/velocity, foot contacts, 78 obs, 23 actions. |
+| Command Lifecycle | **`REAL-EQUIVALENT`** | Explicit verification chain: `USER INPUT → PARSED → VALIDATED → ACCEPTED/REJECTED → APPLIED → SIMULATOR RESULT`. Range clipping explicitly logged. |
+| Battery / Thermal Readings in Web UI | **`PLACEHOLDER`** | Honestly labeled as `model placeholder` and `virtual model`. No fabricated health curves. |
+
+

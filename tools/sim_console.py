@@ -67,9 +67,15 @@ class SimConsole:
         use_viewer: bool = True,
         telemetry_verbosity: str = "normal",
         telemetry_rate_hz: float = 2.0,
+        enable_web: bool = False,
+        web_port: int = 8852,
+        ws_port: int = 8854,
     ):
         self.realtime = realtime
         self.use_viewer = use_viewer
+        self.enable_web = enable_web
+        self.web_port = web_port
+        self.ws_port = ws_port
         self.running = False
         self._shutdown_event = threading.Event()
 
@@ -90,16 +96,35 @@ class SimConsole:
             rate_hz=telemetry_rate_hz,
         )
 
-        # 5. Viewer handle
+        # 5. Optional Web Dashboard Gateway
+        self.gateway = None
+        if self.enable_web:
+            try:
+                from web.server.gateway import WebGateway
+                self.gateway = WebGateway(
+                    backend=self.backend,
+                    core=self.core,
+                    telemetry_engine=self.telemetry,
+                    http_port=self.web_port,
+                    ws_port=self.ws_port,
+                )
+                self.gateway.start()
+            except Exception as e:
+                log.error("[CONSOLE] Could not start WebGateway: %s", e)
+
+        # 6. Viewer handle
         self.viewer = None
 
-        # 6. Periodic telemetry thread
+        # 7. Periodic telemetry thread
         self.periodic_telemetry_active = False
 
-        # 7. Keyboard velocity steps
+        # 8. Keyboard velocity steps
         self.kb_vx_step = 0.05
         self.kb_vy_step = 0.05
         self.kb_wz_step = 0.10
+
+        self.physics_thread: Optional[threading.Thread] = None
+        self.telemetry_thread: Optional[threading.Thread] = None
 
     def start_viewer(self) -> bool:
         """Launch MuJoCo passive viewer if requested and display is available."""
@@ -178,6 +203,7 @@ class SimConsole:
     def print_banner(self) -> None:
         """Print console startup banner."""
         viewer_status = "ACTIVE" if (self.viewer is not None and self.viewer.is_running()) else "HEADLESS"
+        web_info = f"\n Web UI     : http://127.0.0.1:{self.web_port}\n WebSocket  : ws://127.0.0.1:{self.ws_port}" if self.enable_web else ""
         banner = f"""
 ================================================================
  ASIMOV 1 — VIRTUAL MUJOCO CONTROL CONSOLE
@@ -188,7 +214,7 @@ class SimConsole:
  Control    : INTERACTIVE REPL
  Telemetry  : {self.telemetry.rate_hz:.1f} Hz ({self.telemetry.verbosity.upper()})
  Viewer     : {viewer_status}
- Mode       : {self.backend.control_mode.upper()}
+ Mode       : {self.backend.control_mode.upper()}{web_info}
 
  Commands:
    stand                   : Arm and ramp robot to settled standing pose
@@ -676,20 +702,20 @@ class SimConsole:
         self.start_viewer()
 
         # 2. Start physics simulation thread
-        physics_thread = threading.Thread(
+        self.physics_thread = threading.Thread(
             target=self._physics_loop,
             daemon=True,
             name="asimov-physics-loop",
         )
-        physics_thread.start()
+        self.physics_thread.start()
 
         # 3. Start periodic telemetry thread
-        telemetry_thread = threading.Thread(
+        self.telemetry_thread = threading.Thread(
             target=self._periodic_telemetry_loop,
             daemon=True,
             name="asimov-telemetry-loop",
         )
-        telemetry_thread.start()
+        self.telemetry_thread.start()
 
         # 4. Print banner
         self.print_banner()
@@ -725,6 +751,18 @@ class SimConsole:
         """Clean shutdown of console, simulator, and viewer."""
         self.running = False
         self._shutdown_event.set()
+        if self.physics_thread is not None and self.physics_thread.is_alive():
+            self.physics_thread.join(timeout=1.0)
+            self.physics_thread = None
+        if self.telemetry_thread is not None and self.telemetry_thread.is_alive():
+            self.telemetry_thread.join(timeout=1.0)
+            self.telemetry_thread = None
+        if self.gateway is not None:
+            try:
+                self.gateway.stop()
+            except Exception:
+                pass
+            self.gateway = None
         if self.viewer is not None and self.viewer.is_running():
             try:
                 self.viewer.close()
@@ -743,6 +781,9 @@ def main() -> int:
     parser.add_argument("--telemetry-verbosity", type=str, default="normal", choices=["minimal", "normal", "verbose", "raw"], help="Telemetry verbosity")
     parser.add_argument("--telemetry-rate", type=float, default=2.0, help="Periodic telemetry rate in Hz")
     parser.add_argument("--script", type=str, default=None, help="Path to batch command script file")
+    parser.add_argument("--web", action="store_true", help="Launch live web dashboard gateway alongside interactive console")
+    parser.add_argument("--web-port", type=int, default=8852, help="HTTP web port for dashboard (default: 8852)")
+    parser.add_argument("--ws-port", type=int, default=8854, help="WebSocket telemetry port (default: 8854)")
     args = parser.parse_args()
 
     console = SimConsole(
@@ -751,6 +792,9 @@ def main() -> int:
         use_viewer=not args.no_viewer,
         telemetry_verbosity=args.telemetry_verbosity,
         telemetry_rate_hz=args.telemetry_rate,
+        enable_web=args.web,
+        web_port=args.web_port,
+        ws_port=args.ws_port,
     )
     console.run(script_path=args.script)
     return 0
