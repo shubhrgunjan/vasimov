@@ -74,6 +74,7 @@ COMMANDS_LIST = [
     "drive", "game", "teleop", "live", "spawn",
     "stand", "walk", "stop", "fall", "safefall", "getup", "recover", "standup",
     "hello", "wave", "bow", "squat", "crouch", "cheer", "dance", "nod", "shake", "emote",
+    "policy",
     "reset", "pause", "resume", "step", "mode",
     "joints", "select", "set", "add", "sub", "zero",
     "state", "obs", "action", "io", "contacts", "sensors", "torque", "telemetry",
@@ -82,6 +83,7 @@ COMMANDS_LIST = [
 
 SUBCOMMANDS = {
     "mode": ["policy", "manual", "hybrid"],
+    "policy": ["list", "select", "info", "validate", "active"],
     "telemetry": ["on", "off", "minimal", "normal", "verbose", "raw", "rate"],
     "env": ["list", "load", "reset"],
     "env load": ["flat", "obstacles", "playground", "physics_obstacles", "friction_low", "friction_high", "heavy_robot", "light_robot", "obstacle_basic", "terrain_basic"],
@@ -204,12 +206,18 @@ class SimConsole:
         enable_web: bool = False,
         web_port: int = 8852,
         ws_port: int = 8854,
+        policy_name: Optional[str] = None,
+        locomotion_policy: Optional[str] = None,
+        balance_policy: Optional[str] = None,
+        recovery_policy: Optional[str] = None,
+        debug_policy: bool = False,
     ):
         self.realtime = realtime
         self.use_viewer = use_viewer
         self.enable_web = enable_web
         self.web_port = web_port
         self.ws_port = ws_port
+        self.debug_policy = debug_policy
         self.running = False
         self._shutdown_event = threading.Event()
 
@@ -218,6 +226,28 @@ class SimConsole:
 
         # 2. Initialize SimBackend
         self.backend = SimBackend(self.core)
+
+        # 2b. Pluggable Policy configuration
+        if policy_name:
+            self.backend.load_policy(policy_name)
+        if locomotion_policy or balance_policy or recovery_policy:
+            from edge.policy_manager import ArbitrationMode
+            self.backend.policy_manager.mode = ArbitrationMode.AUTO_COMPOSE
+            if locomotion_policy:
+                self.backend.policy_manager.register_policy(
+                    self.backend.policy_registry.instantiate(locomotion_policy),
+                    category="locomotion"
+                )
+            if balance_policy:
+                self.backend.policy_manager.register_policy(
+                    self.backend.policy_registry.instantiate(balance_policy),
+                    category="balance"
+                )
+            if recovery_policy:
+                self.backend.policy_manager.register_policy(
+                    self.backend.policy_registry.instantiate(recovery_policy),
+                    category="recovery"
+                )
 
         # 3. Load initial environment preset if not flat
         if env_preset != "flat":
@@ -371,13 +401,17 @@ class SimConsole:
         """Print high-tech console startup banner."""
         viewer_status = f"{C_GREEN}● ACTIVE{C_RESET}" if (self.viewer is not None and self.viewer.is_running()) else f"{C_YELLOW}○ HEADLESS{C_RESET}"
         web_info = f"\n  {C_CYAN}🌐 Web Dashboard{C_RESET} : http://127.0.0.1:{self.web_port}\n  {C_CYAN}📡 Telemetry WS  {C_RESET} : ws://127.0.0.1:{self.ws_port}" if self.enable_web else ""
+        active_pol = self.backend.policy_manager.get_active_policy() if hasattr(self.backend, "policy_manager") else None
+        pol_name_str = active_pol.name if active_pol else "None"
+        pol_spec_str = f"{active_pol.manifest.observation.dim}-D obs ➔ {active_pol.manifest.action.dim}-D acts" if active_pol else "N/A"
+        pol_freq_str = f"{active_pol.manifest.control.frequency_hz:.0f} Hz" if active_pol else "N/A"
         banner = f"""
 {C_CYAN}╔══════════════════════════════════════════════════════════════════════════════╗
 ║                    ASIMOV 1 — VIRTUAL MUJOCO CONTROL CONSOLE                ║
 ╚══════════════════════════════════════════════════════════════════════════════╝{C_RESET}
   {C_CYAN}Physics Engine{C_RESET}   : MuJoCo ({self.backend.model.opt.timestep*1000:.1f}ms / 200 Hz loop)
-  {C_CYAN}Locomotion Policy{C_RESET}: Menlo Asimov 1 Locomotion ONNX (78-D obs ➔ 23-D acts)
-  {C_CYAN}Policy Checkpoint{C_RESET}: {POLICY_HASH_SHORT}
+  {C_CYAN}Active Policy{C_RESET}    : {pol_name_str} ({pol_spec_str} @ {pol_freq_str})
+  {C_CYAN}Policy Category{C_RESET}  : {active_pol.category.upper() if active_pol else 'NONE'}
   {C_CYAN}Live 3D Viewer{C_RESET}   : {viewer_status}
   {C_CYAN}Telemetry Engine{C_RESET} : {self.telemetry.rate_hz:.1f} Hz ({self.telemetry.verbosity.upper()})
   {C_CYAN}Active Mode{C_RESET}      : {C_BOLD}{self.backend.control_mode.upper()}{C_RESET}{web_info}
@@ -393,6 +427,13 @@ class SimConsole:
     {C_BOLD}stop{C_RESET}                    Zero commanded velocity & hold active balance
     {C_BOLD}fall / safefall{C_RESET}         Controlled safe collapse into compliant DAMP mode
     {C_BOLD}getup / recover{C_RESET}         Clear faults, restore base height & arm standing
+
+  {C_CYAN}🧠 Pluggable Policies{C_RESET}
+    {C_BOLD}policy list{C_RESET}             List all discovered policies in catalog
+    {C_BOLD}policy select <name>{C_RESET}    Hot-swap active policy (locomotion, getup, safefall)
+    {C_BOLD}policy info [name]{C_RESET}      Display policy manifest specifications
+    {C_BOLD}policy validate [name]{C_RESET}  Run deep validation on policy weights & kinematic spec
+    {C_BOLD}policy active{C_RESET}            Show runtime status and inference telemetry of active policy
 
   {C_MAGENTA}🎭 Gestures & Emotes{C_RESET}
     {C_BOLD}hello / wave{C_RESET}            Raise right arm & wave greeting
@@ -581,6 +622,9 @@ class SimConsole:
                 control_cmd="backend.getup() -> clear faults, base_z=0.61m, gantry ENGAGED, STAND armed",
                 sim_result=f"mode = {res.get('edge_mode')}, base_z = {res.get('base_z'):.4f}m, gantry = {res.get('gantry')}\n    {res.get('message')}",
             )
+
+        elif cmd == "policy":
+            self._handle_policy_cmd(args)
 
         elif cmd in ("drive", "game", "teleop", "live"):
             try:
@@ -958,6 +1002,76 @@ class SimConsole:
         else:
             print(f"Unknown command: '{cmd}'. Type 'help' for command list.")
 
+    def _handle_policy_cmd(self, args: List[str]) -> None:
+        """Handle policy inspection, selection, and validation."""
+        sub = args[0].lower() if args else "list"
+        if sub in ("list", "ls", "catalog"):
+            print(self.backend.policy_registry.format_policy_catalog())
+        elif sub in ("select", "load", "set", "use"):
+            if len(args) < 2:
+                print(f"{C_RED}Usage: policy select <name_or_dir>{C_RESET}")
+                return
+            pol_name = args[1]
+            try:
+                self.backend.load_policy(pol_name)
+                pol = self.backend.policy_manager.get_active_policy()
+                dim_str = f"{pol.manifest.observation.dim}-D obs ➔ {pol.manifest.action.dim}-D acts" if pol else "N/A"
+                freq_str = f"{pol.manifest.control.frequency_hz:.0f} Hz" if pol else "N/A"
+                print(f"{C_GREEN}Successfully loaded policy '{pol_name}' ({dim_str} @ {freq_str}){C_RESET}")
+            except Exception as e:
+                print(f"{C_RED}Failed to load policy '{pol_name}': {e}{C_RESET}")
+        elif sub in ("info", "inspect"):
+            target = args[1] if len(args) > 1 else None
+            pol = self.backend.policy_manager.get_active_policy()
+            if target:
+                try:
+                    manifest = self.backend.policy_registry.get_manifest(target)
+                except Exception as e:
+                    print(f"{C_RED}Error: {e}{C_RESET}")
+                    return
+            elif pol:
+                manifest = pol.manifest
+            else:
+                print(f"{C_RED}No policy specified and no active policy.{C_RESET}")
+                return
+            print(f"\n{C_CYAN}── POLICY MANIFEST: {manifest.name} ─────────────────────────────{C_RESET}")
+            print(f"  Category    : {manifest.category}")
+            print(f"  Version     : {manifest.version}")
+            print(f"  Runtime     : {manifest.runtime.type}")
+            print(f"  Model Path  : {manifest.model.path}")
+            print(f"  Frequency   : {manifest.control.frequency_hz} Hz")
+            print(f"  Observation : {manifest.observation.dim}-D ({manifest.observation.dtype})")
+            print(f"  Action      : {manifest.action.dim}-D ({manifest.action.dtype}, {manifest.action.type})")
+            print(f"  Actuator Q  : {len(manifest.action.joint_order)} joints")
+            if manifest.description:
+                print(f"  Description : {manifest.description}")
+        elif sub in ("validate", "check"):
+            target = args[1] if len(args) > 1 else (self.backend.policy_manager.active_policy_name or "official_locomotion")
+            valid, checks = self.backend.policy_registry.validate_policy(target, self.backend.model)
+            print(f"\n{C_CYAN}── POLICY VALIDATION: {target} ──────────────────────────────{C_RESET}")
+            for c in checks:
+                if c.startswith("✓"):
+                    print(f"  {C_GREEN}{c}{C_RESET}")
+                else:
+                    print(f"  {C_RED}{c}{C_RESET}")
+            if valid:
+                print(f"\n{C_GREEN}✓ POLICY VALIDATION PASSED{C_RESET}")
+            else:
+                print(f"\n{C_RED}✗ POLICY VALIDATION FAILED{C_RESET}")
+        elif sub in ("active", "status"):
+            pol = self.backend.policy_manager.get_active_policy()
+            if pol:
+                print(f"\n{C_CYAN}Active Policy:{C_RESET} {pol.name}")
+                print(f"  Category      : {pol.category}")
+                print(f"  Obs / Act Dim : {pol.manifest.observation.dim} / {pol.manifest.action.dim}")
+                print(f"  Frequency     : {pol.manifest.control.frequency_hz} Hz")
+                print(f"  Step Count    : {pol.step_counter}")
+                print(f"  Last Latency  : {pol.last_inference_time_ms:.2f} ms")
+            else:
+                print("No active policy.")
+        else:
+            print(f"{C_RED}Unknown policy subcommand '{sub}'. Available: list, select, info, validate, active{C_RESET}")
+
     def _handle_keyboard_shortcut(self, key: str) -> None:
         """Handle single-key commands."""
         sim_t = float(self.backend.data.time)
@@ -1307,9 +1421,8 @@ class SimConsole:
             v = self.viewer
             self.viewer = None
             try:
-                if v.is_running():
-                    v.close()
-            except Exception:
+                v.close()
+            except BaseException:
                 pass
         self.backend.env_manager.cleanup()
         log.info("[CONSOLE] Virtual Asimov Console terminated cleanly.")
@@ -1327,7 +1440,44 @@ def main() -> int:
     parser.add_argument("--web-port", type=int, default=8852, help="HTTP web port for dashboard (default: 8852)")
     parser.add_argument("--ws-port", type=int, default=8854, help="WebSocket telemetry port (default: 8854)")
     parser.add_argument("--drive", "--game", "--teleop", dest="drive_mode", action="store_true", help="Launch directly into live keyboard game teleoperation mode (WASD keys)")
+
+    # Pluggable Policy CLI extensions
+    parser.add_argument("--policy", type=str, default=None, help="Policy name or directory to load (e.g. official_locomotion, getup_safefall, custom/getup)")
+    parser.add_argument("--list-policies", action="store_true", help="List all discovered policies in catalog and exit")
+    parser.add_argument("--validate", action="store_true", help="Validate specified policy contract, weights, and joint kinematics and exit")
+    parser.add_argument("--debug-policy", action="store_true", help="Enable verbose debug telemetry for policy observations and actions")
+    parser.add_argument("--locomotion", type=str, default=None, help="Specify locomotion policy for multi-policy composition")
+    parser.add_argument("--balance", type=str, default=None, help="Specify balance policy for multi-policy composition")
+    parser.add_argument("--recovery", type=str, default=None, help="Specify recovery policy for multi-policy composition")
     args = parser.parse_args()
+
+    # If --list-policies requested, discover and print catalog, then exit
+    if args.list_policies:
+        from edge.policy_registry import PolicyRegistry
+        reg = PolicyRegistry()
+        reg.discover()
+        print(reg.format_policy_catalog())
+        return 0
+
+    # If --validate requested, run validation on policy and exit
+    if args.validate:
+        from edge.policy_registry import PolicyRegistry
+        reg = PolicyRegistry()
+        reg.discover()
+        target_policy = args.policy or "official_locomotion"
+        valid, checks = reg.validate_policy(target_policy)
+        print(f"\n{C_CYAN}── POLICY VALIDATION REPORT: {target_policy} ──{C_RESET}")
+        for c in checks:
+            if c.startswith("✓"):
+                print(f"  {C_GREEN}{c}{C_RESET}")
+            else:
+                print(f"  {C_RED}{c}{C_RESET}")
+        if valid:
+            print(f"\n{C_GREEN}✓ POLICY VALIDATION PASSED — Ready for simulation.{C_RESET}\n")
+            return 0
+        else:
+            print(f"\n{C_RED}✗ POLICY VALIDATION FAILED — Cannot run in simulation.{C_RESET}\n")
+            return 1
 
     console = SimConsole(
         env_preset=args.env,
@@ -1338,6 +1488,11 @@ def main() -> int:
         enable_web=args.web,
         web_port=args.web_port,
         ws_port=args.ws_port,
+        policy_name=args.policy,
+        locomotion_policy=args.locomotion,
+        balance_policy=args.balance,
+        recovery_policy=args.recovery,
+        debug_policy=args.debug_policy,
     )
     console.run(script_path=args.script, start_in_drive_mode=args.drive_mode)
     return 0

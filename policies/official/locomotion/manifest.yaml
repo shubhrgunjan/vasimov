@@ -1,0 +1,175 @@
+name: official_locomotion
+version: "1.0"
+category: locomotion
+description: "Official Menlo Asimov 1 locomotion policy (Menlo/asimov1-locomotion-0818)"
+
+runtime:
+  type: onnx
+  model_path: policy.onnx
+
+control:
+  frequency_hz: 50.0
+  physics_dt: 0.005
+  decimation: 4
+
+observation:
+  dim: 78
+  shape: [1, 78]
+  dtype: float32
+  history_length: 1
+  layout: flat
+  terms:
+    - name: base_ang_vel
+      dim: 3
+      scale: 0.25
+      meaning: "IMU gyro in local base frame (rad/s)"
+    - name: projected_gravity
+      dim: 3
+      scale: 1.0
+      meaning: "pelvis body frame unit gravity vector"
+    - name: velocity_commands
+      dim: 3
+      scale: 1.0
+      meaning: "twist velocity command [vx, vy, vyaw]"
+    - name: joint_pos_slot01
+      dim: 9
+      scale: 1.0
+      meaning: "q - q_default for slot01 joints"
+    - name: joint_pos_slot23
+      dim: 8
+      scale: 1.0
+      meaning: "q - q_default for slot23 joints"
+    - name: joint_pos_slot45
+      dim: 6
+      scale: 1.0
+      meaning: "q - q_default for slot45 joints"
+    - name: joint_vel_slot01
+      dim: 9
+      scale: 0.10
+      meaning: "joint velocities for slot01 joints"
+    - name: joint_vel_slot23
+      dim: 8
+      scale: 0.10
+      meaning: "joint velocities for slot23 joints"
+    - name: joint_vel_slot45
+      dim: 6
+      scale: 0.10
+      meaning: "joint velocities for slot45 joints"
+    - name: actions
+      dim: 23
+      scale: 1.0
+      meaning: "previous step 23-D action vector"
+
+action:
+  dim: 23
+  shape: [1, 23]
+  dtype: float32
+  type: joint_position
+  scale: 0.25
+  offset: default_joint_pos
+  joint_order:
+    - left_hip_pitch_joint
+    - left_hip_roll_joint
+    - left_hip_yaw_joint
+    - left_knee_joint
+    - left_ankle_pitch_joint
+    - left_ankle_roll_joint
+    - right_hip_pitch_joint
+    - right_hip_roll_joint
+    - right_hip_yaw_joint
+    - right_knee_joint
+    - right_ankle_pitch_joint
+    - right_ankle_roll_joint
+    - waist_yaw_joint
+    - right_shoulder_pitch_joint
+    - right_shoulder_roll_joint
+    - right_shoulder_yaw_joint
+    - right_elbow_joint
+    - right_wrist_yaw_joint
+    - left_shoulder_pitch_joint
+    - left_shoulder_roll_joint
+    - left_shoulder_yaw_joint
+    - left_elbow_joint
+    - left_wrist_yaw_joint
+
+default_joint_pos:
+  waist_yaw_joint: 0.0
+  right_shoulder_pitch_joint: 0.25
+  right_shoulder_roll_joint: 0.05
+  right_shoulder_yaw_joint: 0.0
+  right_elbow_joint: -0.40
+  right_wrist_yaw_joint: 0.0
+  left_shoulder_pitch_joint: -0.25
+  left_shoulder_roll_joint: -0.05
+  left_shoulder_yaw_joint: 0.0
+  left_elbow_joint: 0.40
+  left_wrist_yaw_joint: 0.0
+  left_hip_pitch_joint: -0.15
+  left_hip_roll_joint: 0.0
+  left_hip_yaw_joint: 0.0
+  left_knee_joint: 0.45
+  left_ankle_pitch_joint: -0.30
+  left_ankle_roll_joint: 0.0
+  right_hip_pitch_joint: 0.15
+  right_hip_roll_joint: 0.0
+  right_hip_yaw_joint: 0.0
+  right_knee_joint: -0.45
+  right_ankle_pitch_joint: 0.30
+  right_ankle_roll_joint: 0.0
+
+pd_gains:
+  hip_pitch:
+    joints: [".*_hip_pitch_joint"]
+    kp: 150.0
+    kd: 5.0
+    effort_limit: 40.0
+  waist:
+    joints: ["waist_yaw_joint"]
+    kp: 65.0
+    kd: 5.0
+    effort_limit: 40.0
+  hip_roll:
+    joints: [".*_hip_roll_joint"]
+    kp: 150.0
+    kd: 5.0
+    effort_limit: 30.0
+  shoulder_pitch:
+    joints: [".*_shoulder_pitch_joint"]
+    kp: 57.0
+    kd: 5.0
+    effort_limit: 30.0
+  hip_yaw:
+    joints: [".*_hip_yaw_joint"]
+    kp: 150.0
+    kd: 5.0
+    effort_limit: 20.0
+  shoulder_yaw:
+    joints: [".*_shoulder_yaw_joint"]
+    kp: 96.0
+    kd: 5.0
+    effort_limit: 20.0
+  knee:
+    joints: [".*_knee_joint"]
+    kp: 150.0
+    kd: 5.0
+    effort_limit: 25.0
+  shoulder_roll:
+    joints: [".*_shoulder_roll_joint"]
+    kp: 86.0
+    kd: 5.0
+    effort_limit: 25.0
+  ankle_pitch:
+    joints: [".*_ankle_pitch_joint"]
+    kp: 110.0
+    kd: 5.0
+    effort_limit: 40.0
+  ankle_roll:
+    joints: [".*_ankle_roll_joint"]
+    kp: 110.0
+    kd: 5.0
+    effort_limit: 17.0
+  elbow_wrist:
+    joints: [".*_elbow_joint", ".*_wrist_yaw_joint"]
+    kp: 40.0
+    kd: 2.0
+    effort_limit: 12.0

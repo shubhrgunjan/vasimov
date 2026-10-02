@@ -456,6 +456,7 @@ class EdgeCore:
         self.mode = EdgeMode.DAMP
         self.move_submode = MoveSubmode.NONE
         self.stand_settled = False
+        self.current_policy_targets = self.default_pose_sim
         self.boot_time_us = int(time.time() * 1_000_000)
 
     def set_battery(

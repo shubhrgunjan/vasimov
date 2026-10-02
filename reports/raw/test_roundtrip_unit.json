@@ -1,18 +1,18 @@
 {
   "metadata": {
     "name": "test_roundtrip_unit",
-    "start_wall_time": 1790958425.5728402,
+    "start_wall_time": 1790967393.4325044,
     "custom_metadata": {
       "test": true,
       "seed": 42
     },
-    "end_wall_time": 1790958425.6020498,
+    "end_wall_time": 1790967393.489105,
     "frame_count": 25
   },
   "frames": [
     {
       "sim_time": 0.005,
-      "wall_time": 1790958425.5745592,
+      "wall_time": 1790967393.4429607,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -196,7 +196,7 @@
     },
     {
       "sim_time": 0.01,
-      "wall_time": 1790958425.5759404,
+      "wall_time": 1790967393.446703,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -380,7 +380,7 @@
     },
     {
       "sim_time": 0.015,
-      "wall_time": 1790958425.5771375,
+      "wall_time": 1790967393.4494007,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -564,7 +564,7 @@
     },
     {
       "sim_time": 0.02,
-      "wall_time": 1790958425.5784144,
+      "wall_time": 1790967393.4514897,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -748,7 +748,7 @@
     },
     {
       "sim_time": 0.025,
-      "wall_time": 1790958425.579779,
+      "wall_time": 1790967393.4541602,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -932,7 +932,7 @@
     },
     {
       "sim_time": 0.030000000000000002,
-      "wall_time": 1790958425.5807319,
+      "wall_time": 1790967393.455618,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -1116,7 +1116,7 @@
     },
     {
       "sim_time": 0.035,
-      "wall_time": 1790958425.5816858,
+      "wall_time": 1790967393.4570746,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -1300,7 +1300,7 @@
     },
     {
       "sim_time": 0.04,
-      "wall_time": 1790958425.5826323,
+      "wall_time": 1790967393.4584963,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -1484,7 +1484,7 @@
     },
     {
       "sim_time": 0.045,
-      "wall_time": 1790958425.5843675,
+      "wall_time": 1790967393.460357,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -1668,7 +1668,7 @@
     },
     {
       "sim_time": 0.049999999999999996,
-      "wall_time": 1790958425.5852768,
+      "wall_time": 1790967393.4619043,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -1852,7 +1852,7 @@
     },
     {
       "sim_time": 0.05499999999999999,
-      "wall_time": 1790958425.5862203,
+      "wall_time": 1790967393.463295,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -2036,7 +2036,7 @@
     },
     {
       "sim_time": 0.05999999999999999,
-      "wall_time": 1790958425.587434,
+      "wall_time": 1790967393.464655,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -2220,7 +2220,7 @@
     },
     {
       "sim_time": 0.06499999999999999,
-      "wall_time": 1790958425.5895607,
+      "wall_time": 1790967393.4663548,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -2404,7 +2404,7 @@
     },
     {
       "sim_time": 0.06999999999999999,
-      "wall_time": 1790958425.5905895,
+      "wall_time": 1790967393.4677374,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -2588,7 +2588,7 @@
     },
     {
       "sim_time": 0.075,
-      "wall_time": 1790958425.59149,
+      "wall_time": 1790967393.46914,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -2772,7 +2772,7 @@
     },
     {
       "sim_time": 0.08,
-      "wall_time": 1790958425.592335,
+      "wall_time": 1790967393.470555,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -2956,7 +2956,7 @@
     },
     {
       "sim_time": 0.085,
-      "wall_time": 1790958425.5934353,
+      "wall_time": 1790967393.472748,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -3140,7 +3140,7 @@
     },
     {
       "sim_time": 0.09000000000000001,
-      "wall_time": 1790958425.5943093,
+      "wall_time": 1790967393.4744012,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -3324,7 +3324,7 @@
     },
     {
       "sim_time": 0.09500000000000001,
-      "wall_time": 1790958425.5951307,
+      "wall_time": 1790967393.4761016,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -3508,7 +3508,7 @@
     },
     {
       "sim_time": 0.10000000000000002,
-      "wall_time": 1790958425.5960088,
+      "wall_time": 1790967393.4778805,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -3692,7 +3692,7 @@
     },
     {
       "sim_time": 0.10500000000000002,
-      "wall_time": 1790958425.5971422,
+      "wall_time": 1790967393.4802406,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -3876,7 +3876,7 @@
     },
     {
       "sim_time": 0.11000000000000003,
-      "wall_time": 1790958425.598085,
+      "wall_time": 1790967393.481926,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -4060,7 +4060,7 @@
     },
     {
       "sim_time": 0.11500000000000003,
-      "wall_time": 1790958425.5990582,
+      "wall_time": 1790967393.4835436,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -4244,7 +4244,7 @@
     },
     {
       "sim_time": 0.12000000000000004,
-      "wall_time": 1790958425.5998983,
+      "wall_time": 1790967393.485311,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -4428,7 +4428,7 @@
     },
     {
       "sim_time": 0.12500000000000003,
-      "wall_time": 1790958425.6009562,
+      "wall_time": 1790967393.4874787,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",

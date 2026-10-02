@@ -95,6 +95,11 @@ class SimBackend:
         pd_update: str = "per_physics_step",
         auto_gantry: bool = True,
         enable_l1: bool = False,
+        policy_name: Optional[str] = "official_locomotion",
+        locomotion_policy: Optional[str] = None,
+        recovery_policy: Optional[str] = None,
+        balance_policy: Optional[str] = None,
+        auto_compose: bool = False,
     ):
         self.core = core
         if model_path is None:
@@ -169,13 +174,33 @@ class SimBackend:
             self.jnt_name_to_qposadr[jname] = self.model.jnt_qposadr[i]
             self.jnt_name_to_dofadr[jname] = self.model.jnt_dofadr[i]
 
-        # Policy controller (Menlo/asimov1-locomotion-0818)
+        # Policy Manager & Registry (Pluggable Architecture)
         try:
-            from edge.policy import PolicyController
-            self.policy_controller: Optional[PolicyController] = PolicyController()
+            from edge.policy_registry import PolicyRegistry
+            from edge.policy_manager import PolicyManager
+            self.policy_registry = PolicyRegistry()
+            self.policy_manager = PolicyManager(
+                registry=self.policy_registry,
+                default_policy_name=policy_name or "official_locomotion",
+            )
+            if locomotion_policy or recovery_policy or balance_policy or auto_compose:
+                self.policy_manager.configure_multi_policy(
+                    locomotion=locomotion_policy or "official_locomotion",
+                    recovery=recovery_policy,
+                    balance=balance_policy,
+                    auto_compose=auto_compose,
+                )
+            self.policy_controller = self.policy_manager.active_policy
+            log.info("[SIM] Pluggable PolicyManager loaded with active policy: '%s'", self.policy_manager.active_policy_name)
         except Exception as e:
-            log.warning("[SIM] PolicyController could not be initialized: %s", e)
-            self.policy_controller = None
+            log.warning("[SIM] Pluggable PolicyManager could not be initialized: %s; falling back to legacy PolicyController", e)
+            self.policy_registry = None
+            self.policy_manager = None
+            try:
+                from edge.policy import PolicyController
+                self.policy_controller = PolicyController()
+            except Exception:
+                self.policy_controller = None
 
         # Push disturbance tracking
         self.push_remaining_steps: int = 0
@@ -239,7 +264,9 @@ class SimBackend:
                 self.model.eq_data[self.gantry_eq_id, 3:6] = [0.0, 0.0, -SETTLED_BASE_Z]
             self.gantry_released_by_auto = False
 
-            if hasattr(self, "policy_controller") and self.policy_controller is not None:
+            if hasattr(self, "policy_manager") and self.policy_manager is not None:
+                self.policy_manager.reset()
+            elif hasattr(self, "policy_controller") and self.policy_controller is not None:
                 self.policy_controller.reset()
 
             if hasattr(self, "emote_controller") and self.emote_controller is not None:
@@ -291,6 +318,68 @@ class SimBackend:
             idx = 0 if direction.lower() == "x" else (1 if direction.lower() == "y" else 2)
             self.push_force_vec[idx] = float(force_n)
             log.warning("[SIM] Applying push: %.1f N in '%s' for %.2fs (%d steps)", force_n, direction, duration_s, steps)
+
+    def _build_robot_state(self) -> Any:
+        """Construct canonical RobotState from current MuJoCo data structures."""
+        from edge.robot_state import RobotState
+
+        pos = np.array(self.data.qpos[:3], dtype=np.float64)
+        quat = np.array(self.data.qpos[3:7], dtype=np.float64)
+        R = self.data.xmat[self.pelvis_body_id].reshape(3, 3)
+        lin_vel_world = np.array(self.data.qvel[:3], dtype=np.float64)
+        ang_vel_world = np.array(self.data.qvel[3:6], dtype=np.float64)
+        lin_vel_body = R.T @ lin_vel_world
+        ang_vel_body = R.T @ ang_vel_world
+        proj_grav = R.T @ np.array([0.0, 0.0, -1.0], dtype=np.float64)
+
+        j_pos = {
+            jn: float(self.data.qpos[adr])
+            for jn, adr in self.jnt_name_to_qposadr.items()
+        }
+        j_vel = {
+            jn: float(self.data.qvel[adr])
+            for jn, adr in self.jnt_name_to_dofadr.items()
+        }
+        applied_torques = self.get_joint_torques()
+        contacts = self.get_contacts()
+
+        return RobotState(
+            sim_time=float(self.data.time),
+            dt=self.dt,
+            step_count=self.step_count,
+            pelvis_pos=pos,
+            pelvis_quat=quat,
+            pelvis_xmat=R,
+            base_lin_vel_world=lin_vel_world,
+            base_ang_vel_world=ang_vel_world,
+            base_lin_vel_body=lin_vel_body,
+            base_ang_vel_body=ang_vel_body,
+            projected_gravity=proj_grav,
+            joint_positions=j_pos,
+            joint_velocities=j_vel,
+            actuator_ctrl={
+                (mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) or f"act_{i}"): float(self.data.ctrl[i])
+                for i in range(self.model.nu)
+            },
+            applied_torques=applied_torques,
+            contacts=contacts,
+            command_vel=(self.core.current_vx, self.core.current_vy, self.core.current_vyaw),
+            mode=self.core.mode.name,
+            gantry_active=self.gantry_active,
+        )
+
+    def load_policy(self, name_or_path: str) -> bool:
+        """Dynamically load or switch active policy."""
+        if hasattr(self, "policy_manager") and self.policy_manager is not None:
+            try:
+                self.policy_manager.set_active_policy(name_or_path)
+                self.policy_controller = self.policy_manager.active_policy
+                log.info("[SIM] Switched active policy to: '%s'", name_or_path)
+                return True
+            except Exception as e:
+                log.error("[SIM] Failed to switch policy to '%s': %s", name_or_path, e)
+                return False
+        return False
 
     def step(self, realtime: bool = False) -> None:
         """Step physics by one integration step (200 Hz, 0.005 s)."""
@@ -345,6 +434,32 @@ class SimBackend:
 
             # Step policy controller if in MOVE/POLICY
             if (
+                self.core.mode == EdgeMode.MOVE
+                and self.core.move_submode == MoveSubmode.POLICY
+                and hasattr(self, "policy_manager")
+                and self.policy_manager is not None
+            ):
+                robot_state = self._build_robot_state()
+                cmd = self.policy_manager.step(robot_state)
+                if cmd is not None:
+                    tgt_list = []
+                    kp_list = []
+                    kd_list = []
+                    for i, jn in enumerate(SIM_JOINTS):
+                        if jn in cmd.joint_targets:
+                            tgt_list.append(cmd.joint_targets[jn])
+                            kp_list.append(cmd.kp.get(jn, 40.0))
+                            kd_list.append(cmd.kd.get(jn, 2.0))
+                        else:
+                            tgt_list.append(self.core.default_pose_sim[i])
+                            kp_list.append(40.0)
+                            kd_list.append(2.0)
+
+                    self.core.current_policy_targets = tuple(tgt_list)
+                    self.core.current_policy_kp = tuple(kp_list)
+                    self.core.current_policy_kd = tuple(kd_list)
+
+            elif (
                 self.core.mode == EdgeMode.MOVE
                 and self.core.move_submode == MoveSubmode.POLICY
                 and self.policy_controller is not None
@@ -1077,36 +1192,54 @@ class SimBackend:
         return self.get_contacts()
 
     def get_policy_observation(self) -> Dict[str, Any]:
-        """Return 78-D observation breakdown and labeled entries."""
+        """Return observation breakdown and labeled entries (78-D locomotion or 375-D recovery)."""
         with self._lock:
             if self.policy_controller is None or self.policy_controller.current_observation is None:
                 return {"dim": 0, "available": False, "raw": [], "labels": []}
 
-            obs = self.policy_controller.current_observation
+            obs = np.asarray(self.policy_controller.current_observation, dtype=np.float32).flatten()
             labels = []
-            labels.extend(["base_ang_vel_x", "base_ang_vel_y", "base_ang_vel_z"])
-            labels.extend(["proj_gravity_x", "proj_gravity_y", "proj_gravity_z"])
-            labels.extend(["cmd_vx", "cmd_vy", "cmd_vyaw"])
-            labels.extend([f"pos_{jn}" for jn in self.policy_controller.slot01_names])
-            labels.extend([f"pos_{jn}" for jn in self.policy_controller.slot23_names])
-            labels.extend([f"pos_{jn}" for jn in self.policy_controller.slot45_names])
-            labels.extend([f"vel_{jn}" for jn in self.policy_controller.slot01_names])
-            labels.extend([f"vel_{jn}" for jn in self.policy_controller.slot23_names])
-            labels.extend([f"vel_{jn}" for jn in self.policy_controller.slot45_names])
-            labels.extend([f"prev_act_{jn}" for jn in self.policy_controller.policy_joints])
+            if len(obs) == 78:
+                labels.extend(["base_ang_vel_x", "base_ang_vel_y", "base_ang_vel_z"])
+                labels.extend(["proj_gravity_x", "proj_gravity_y", "proj_gravity_z"])
+                labels.extend(["cmd_vx", "cmd_vy", "cmd_vyaw"])
+                slot01 = getattr(self.policy_controller, "slot01_names", [])
+                slot23 = getattr(self.policy_controller, "slot23_names", [])
+                slot45 = getattr(self.policy_controller, "slot45_names", [])
+                p_joints = getattr(self.policy_controller, "policy_joints", [])
+                labels.extend([f"pos_{jn}" for jn in slot01])
+                labels.extend([f"pos_{jn}" for jn in slot23])
+                labels.extend([f"pos_{jn}" for jn in slot45])
+                labels.extend([f"vel_{jn}" for jn in slot01])
+                labels.extend([f"vel_{jn}" for jn in slot23])
+                labels.extend([f"vel_{jn}" for jn in slot45])
+                labels.extend([f"prev_act_{jn}" for jn in p_joints])
 
-            return {
-                "dim": len(obs),
-                "available": True,
-                "raw": [float(x) for x in obs],
-                "labels": labels,
-                "base_ang_vel": [float(x) for x in obs[0:3]],
-                "projected_gravity": [float(x) for x in obs[3:6]],
-                "command": [float(x) for x in obs[6:9]],
-                "joint_pos": [float(x) for x in obs[9:32]],
-                "joint_vel": [float(x) for x in obs[32:55]],
-                "prev_actions": [float(x) for x in obs[55:78]],
-            }
+                return {
+                    "dim": len(obs),
+                    "available": True,
+                    "raw": [float(x) for x in obs],
+                    "labels": labels,
+                    "base_ang_vel": [float(x) for x in obs[0:3]],
+                    "projected_gravity": [float(x) for x in obs[3:6]],
+                    "command": [float(x) for x in obs[6:9]],
+                    "joint_pos": [float(x) for x in obs[9:32]],
+                    "joint_vel": [float(x) for x in obs[32:55]],
+                    "prev_actions": [float(x) for x in obs[55:78]],
+                }
+            else:
+                return {
+                    "dim": len(obs),
+                    "available": True,
+                    "raw": [float(x) for x in obs],
+                    "labels": [f"obs_{i}" for i in range(len(obs))],
+                    "base_ang_vel": [float(x) for x in obs[0:3]],
+                    "projected_gravity": [float(x) for x in obs[3:6]],
+                    "command": [0.0, 0.0, 0.0],
+                    "joint_pos": [float(x) for x in obs[6:29]],
+                    "joint_vel": [float(x) for x in obs[29:52]],
+                    "prev_actions": [float(x) for x in obs[52:75]],
+                }
 
     def get_policy_action(self) -> Dict[str, Any]:
         """Return 23-D action breakdown, scaling, and desired joint targets."""
@@ -1114,18 +1247,21 @@ class SimBackend:
             if self.policy_controller is None or self.policy_controller.current_actions is None:
                 return {"dim": 0, "available": False, "raw": [], "items": []}
 
-            raw_act = self.policy_controller.current_actions
-            policy_joints = self.policy_controller.policy_joints
-            default_pos = self.policy_controller.default_pos
+            raw_act = np.asarray(self.policy_controller.current_actions, dtype=np.float32).flatten()
+            policy_joints = list(self.policy_controller.policy_joints)
+            default_pos = dict(self.policy_controller.default_pos)
             action_scale = 0.25
 
             items = []
             for i, jn in enumerate(policy_joints):
-                r = float(raw_act[i])
+                r = float(raw_act[i]) if i < len(raw_act) else 0.0
                 scaled = r * action_scale
                 d = float(default_pos.get(jn, 0.0))
                 q_des = d + scaled
-                kp, kd, eff = self.policy_controller.joint_gains.get(jn, (40.0, 2.0, 50.0))
+                gains = self.policy_controller.joint_gains.get(jn, (40.0, 2.0, 50.0))
+                kp = gains[0] if isinstance(gains, (list, tuple)) else 40.0
+                kd = gains[1] if isinstance(gains, (list, tuple)) else 2.0
+                eff = gains[2] if isinstance(gains, (list, tuple)) and len(gains) > 2 else 50.0
                 items.append({
                     "joint": jn,
                     "raw_action": r,
