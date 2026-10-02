@@ -1,155 +1,240 @@
-# Virtual Asimov 1 (vAsimov) — Step 4: Observability, Fixes & Control
+# Virtual Asimov 1 (vAsimov) — Full Interactive Prototype in MuJoCo
 
-This repository contains the local simulation and virtual edge emulator for the **Asimov 1** humanoid robot (Menlo Research) in **MuJoCo 3.14.0**.
-
-In Step 4, we establish complete simulation observability, web dashboard control, virtual battery management, and determinism verification, connecting directly to the **OFFICIAL, UNMODIFIED `menlo-sdk`** (`menlo.asimov.Robot` and the `menlo` CLI).
+A fully usable, interactive simulation prototype of the **Asimov 1** humanoid robot (Menlo Research) in **MuJoCo 3.14.0**, running the official Hugging Face ONNX locomotion policy (`Menlo/asimov1-locomotion-0818`) with real-time telemetry, manual joint control, hybrid overrides, procedural environments, and session recording/replay.
 
 ---
 
-## 1. Directory Structure
+## 1. What is this?
 
+Virtual Asimov 1 is an open local robotics development and simulation platform that allows you to launch the Asimov 1 humanoid on your PC, personally control it, observe genuine physics-derived telemetry, test locomotion policies, manipulate individual joints, and build custom simulation scenarios without cloud dependencies.
+
+### Core Capabilities:
+- **Interactive Console & 3D Viewer**: Live interactive terminal REPL with optional native MuJoCo passive 3D window.
+- **Three Control Modes**:
+  1. **Policy Mode**: Official locomotion policy inference ($78\,\text{obs} \to 23\,\text{act} \to \text{PD actuators}$).
+  2. **Manual Mode**: Direct joint selection, target setting, and incremental adjustment.
+  3. **Hybrid Mode**: Policy handles walking while user manually overrides specific joints.
+- **Deep Telemetry Engine**: Live base state, simulated IMU, all 25 joints (angles, velocities, torques, limits), foot contacts & forces, and complete 78-to-23 policy I/O pipeline.
+- **Environment System**: Presets (`flat`, `friction_low`, `friction_high`, `heavy_robot`, `light_robot`, `obstacle_basic`, `terrain_basic`) with procedural obstacle insertion (`box`, `step`, `wall`, `table`, `cylinder`).
+- **Flight Data Recording & Replay**: Session recording with JSON and CSV exports in `reports/raw/`.
+
+---
+
+## 2. Quickstart & Installation
+
+### A. Environment Setup
+```bash
+# Automatically sets up Python virtualenv and dependencies (MuJoCo, ONNX Runtime, PyYAML, etc.)
+bash setup.sh
 ```
+
+### B. Launching the Prototype
+Launch the interactive console with one command:
+```bash
+./run_sim.sh
+```
+*(On headless servers or without a desktop display, run `./run_sim.sh --no-viewer`)*.
+
+---
+
+## 3. How to Control the Robot
+
+When the console starts, you are presented with the interactive prompt:
+
+```text
+asimov>
+```
+
+### Locomotion (Policy Mode)
+```text
+stand                   # Arm and ramp robot to settled standing pose
+walk 0.4                # Walk forward at 0.4 m/s (ranges: vx [-0.6, 0.8], vy [-0.5, 0.5], wz [-0.8, 0.8])
+walk 0.3 0.1 0.2        # Combined forward, lateral, and rotational velocity
+stop                    # Zero commanded velocity (robot balances in place)
+```
+
+### Keyboard Shortcuts
+You can also steer directly using single-character commands:
+- `w` / `s`: Forward / backward velocity ($0.05\,\text{m/s}$ steps)
+- `a` / `d`: Lateral velocity ($0.05\,\text{m/s}$ steps)
+- `q` / `e`: Yaw angular velocity ($0.10\,\text{rad/s}$ steps)
+- `space`: Stop / safe hold
+- `p`: Pause / resume simulation
+- `r`: Deterministic reset
+
+### Manual Joint Control Mode
+```text
+mode manual             # Switch to direct joint control
+joints                  # Print table of all 25 joints
+select 4                # Select joint (index 4 = left_knee_joint)
+set 0.60                # Set target in radians (clamped to joint range)
+add 0.05                # Increment target by +0.05 rad
+sub 0.05                # Decrement target by -0.05 rad
+zero                    # Reset to default standing angle
+```
+
+### Hybrid Control Mode
+```text
+mode hybrid             # Policy handles locomotion; manual targets override selected joints
+select left_knee_joint
+set 0.55
+walk 0.3                # Robot walks using ONNX policy while left knee holds 0.55 rad!
+```
+
+---
+
+## 4. How to Inspect Telemetry
+
+The simulator exposes genuine physics quantities from MuJoCo (no fake or fabricated data):
+
+```text
+state                   # Full status dashboard (pose, velocity, attitude, contacts, gait, limits)
+obs                     # 78-D policy observation breakdown (angular vel, gravity, cmd, joint pos/vel)
+action                  # 23-D policy action breakdown and q_des = q_default + 0.25*action synthesis
+io                      # Complete 78 Obs -> 23 Act pipeline visualization
+contacts                # Left & right foot contact booleans, touch sensors, and vertical forces (Fz)
+sensors                 # Simulated IMU (body-frame gyro, projected gravity, orientation quat, linear accel)
+joints                  # Comprehensive 25-joint status table with position limits and torque saturation
+torque                  # Actuator control signals, applied torques, and percentage effort limits
+telemetry <minimal|normal|verbose|raw> # Configure verbosity
+telemetry rate <Hz>     # Set periodic background output rate
+```
+
+---
+
+## 5. How to Load Environments
+
+Easily switch simulation scenarios at runtime:
+
+```text
+env list                # List available presets
+env load obstacle_basic # Load flat corridor with step blocks and obstacles
+env load friction_low   # Load ice-like slippery ground (mu=0.2)
+env load heavy_robot    # Load payload-scaled robot mass (+15%)
+reset                   # Deterministically reset robot pose and simulation
+```
+
+---
+
+## 6. How to Record and Replay
+
+Capture flight sessions for analysis, machine learning, or regression testing:
+
+```text
+record start my_walk    # Start flight data recording
+walk 0.4
+record stop             # Stops recording and writes:
+                        # - reports/raw/my_walk.json (complete telemetry frames)
+                        # - reports/raw/my_walk.csv (timeseries tabular data)
+
+replay my_walk          # Inspect flight recording metadata and verify duration
+```
+
+---
+
+## 7. Control & Data Pipeline Architecture
+
+```text
+User command (CLI / Keyboard)
+     ↓
+Command validation & clipping (vx: [-0.6, 0.8], vy: [-0.5, 0.5], wz: [-0.8, 0.8])
+     ↓
+EdgeCore state machine (DAMP → STAND → MOVE/POLICY)
+     ↓
+50 Hz Observation builder (78-D: base gyro, gravity, cmd, 23 pos, 23 vel, 23 act history)
+     ↓
+ONNX inference (Menlo/asimov1-locomotion-0818, CPUExecutionProvider)
+     ↓
+23 raw actions
+     ↓
+Target synthesis: q_des = q_default + 0.25 * action
+     ↓
+Arbitration: Policy / Manual / Hybrid overrides
+     ↓
+MotorModel PD actuators (200 Hz, tau = Kp*(q_des - q) - Kd*w with speed-torque envelope)
+     ↓
+MuJoCo physics step (200 Hz, dt=0.005s)
+     ↓
+Ground truth telemetry extraction (base, IMU, joints, foot contacts & forces)
+     ↓
+Terminal Dashboard / CSV / JSON Replay
+```
+
+Detailed file mappings and transformations are documented in [docs/pipeline.md](file:///home/shubhr/Shubhr/Projects/vasimov/docs/pipeline.md).
+
+---
+
+## 8. Presentation Script
+
+A complete 16-step reproducible presentation walkthrough is available in [docs/demo.md](file:///home/shubhr/Shubhr/Projects/vasimov/docs/demo.md).
+
+To run an automated end-to-end acceptance demo:
+```bash
+.venv/bin/python examples/run_full_acceptance_demo.py
+```
+*(Verified transcript saved in `reports/raw/step6_acceptance_demo.txt`)*.
+
+---
+
+## 9. Running Tests
+
+Run the complete 66-test verification suite with fault handler:
+
+```bash
+.venv/bin/python -X faulthandler -m unittest discover -s tests -v
+```
+
+All 66 tests pass cleanly covering:
+- Unit & integration tests for console parsing, policy I/O, manual/hybrid joint modes, telemetry, deterministic reset, environment presets, and recording/replay roundtrips.
+- Existing Step 5 tests: motor model layers, differential ankle mapping, wire protocol enums, zero-I/O EdgeCore state machine, and unmodified `menlo-sdk` integration.
+
+---
+
+## 10. Repository Structure
+
+```text
 vasimov/
-├── adapter.py                 # Joint adapter: firmware 25 <-> sim 25 coordinates & ankle kinematics
-├── ankle_map.py               # Differential ankle kinematics & pushrod coupling
-├── build_model.py             # Reproducible model generator (inserts actuators, sensors, gantry)
+├── run_sim.sh                 # One-command executable console launcher
+├── tools/
+│   ├── sim_console.py         # Full interactive CLI console & simulation runner
+│   ├── benchmark_timing.py    # Real-time factor (RTF) timing benchmarks
+│   ├── compare_pd_actuators.py# Actuator parity tests
+│   └── test_stepping_matrix.py# Stepping gait verification
+├── edge/
+│   ├── core.py                # Zero-I/O Edge state machine, safety monitors, watchdogs
+│   ├── sim.py                 # MuJoCo physics backend, gantry, query APIs
+│   ├── policy.py              # ONNX Runtime policy runner & velocity clipping
+│   ├── policy_builder.py      # Unified 78-D observation and 23-D action builder
+│   ├── environment.py         # Environment presets & procedural obstacle generation
+│   ├── telemetry.py           # Telemetry formatting engine & flight data recorder
+│   ├── ground_truth.py        # Sim-only 50 Hz WebSocket stream server (:8854)
+│   └── transports/            # UDP wire protocol transport (:8850, :8851)
+├── docs/
+│   ├── demo.md                # Presentation demonstration guide
+│   └── pipeline.md            # Detailed control & data pipeline specification
+├── examples/
+│   ├── demo_session.txt       # Reproducible demo command list
+│   └── run_full_acceptance_demo.py # 24-step acceptance verification runner
+├── model/
+│   └── asimov_1_vasimov.xml   # Master MuJoCo robot model (25 actuators, sensors, gantry)
+├── assets/
+│   └── policy/                # Pinned ONNX locomotion checkpoint and env configs
 ├── config/
 │   ├── gains.yaml             # PD gains, effort limits, and official standing pose
 │   ├── joints.yaml            # Master convention table for firmware joints 0–24
 │   └── motors.yaml            # Motor model layer toggles and parameters (L0–L4)
-├── dashboard/
-│   └── index.html             # Localhost observability dashboard & control panel (Zero CDN)
-├── edge/
-│   ├── __init__.py            # Edge package
-│   ├── __main__.py            # CLI entry point: python -m edge [options]
-│   ├── core.py                # Zero-I/O Edge core: state machine, arbiters, safety latches, telemetry
-│   ├── ground_truth.py        # Sim-only ~50 Hz WebSocket ground-truth streaming server (:8854)
-│   ├── sim.py                 # MuJoCo physics backend, virtual gantry, HTTP control API (:8852)
-│   └── transports/
-│       ├── __init__.py
-│       └── udp_transport.py   # Official UDP wire protocol (commands :8850, state :8851)
-├── FIDELITY.md                # Provenance & fidelity audit for every command, field, and event
-├── inspect_model.py           # Model inspection diagnostic tool
-├── model/
-│   ├── asimov_1_vasimov.xml   # Derived MuJoCo model (25 actuators, 84 sensors, pelvis weld gantry)
-│   └── throwaway_native_pos.xml # PD parity benchmark model
-├── motor_model.py             # Layered motor model implementation (L0-L4)
-├── reports/
-│   ├── cli_run.log            # Official menlo CLI execution transcript
-│   ├── edge_contract.md       # SDK & Edge contract audit report
-│   ├── joint_mapping.md       # Comparative joint mapping audit
-│   ├── policy_contract.md     # Locomotion policy contract audit (78-D obs, 23-D action, ONNX checkpoint)
-│   └── raw/                   # Raw benchmark data & verifiable output traces
-│       ├── generated_doc_tables.md # Generated master gains & enum tables
-│       ├── nopolicy_cli_outcome.log# Raw CLI transcript against NoPolicy stub
-│       ├── pd_parity_comparison.csv# External torque PD vs MuJoCo native position actuators
-│       ├── push_sweep.csv     # Full sagittal/lateral push disturbance sweep & L1 binding
-│       ├── replay_comparison.json# Bit-level determinism verification metrics
-│       ├── run_recording.npz  # Step-synchronized command & state recording
-│       └── timing_metrics.csv # 60-second telemetry timing benchmarks (mean, jitter, RTF)
-├── stand.py                   # Step-2 standing controller & push benchmark
-├── tests/
-│   ├── test_adapter.py        # Unit tests for 25-joint adapter & ankle round-trips
-│   ├── test_ankle_map.py      # Unit tests for differential ankle kinematics & virtual work
-│   ├── test_battery.py        # Unit & integration tests for Virtual Battery (PLACEHOLDER)
-│   ├── test_edge_core.py      # Pure logic unit tests for state machine, watchdogs, drop rules
-│   ├── test_edge_proto_roundtrip.py # Serialization round-trip tests for EdgeTelemetry & EdgeEvent
-│   ├── test_enums.py          # Unit tests asserting single-source-of-truth wire protocol enums
-│   ├── test_ground_truth_and_dashboard.py # Integration tests for 50Hz WebSocket & dashboard
-│   ├── test_motor_model.py    # Unit tests for motor model layers L0–L4
-│   └── test_sdk_integration.py# End-to-end integration tests using unmodified menlo.asimov.Robot
-├── tools/
-│   ├── benchmark_timing.py    # 60s timing benchmark across fast, realtime, and viewer modes
-│   ├── compare_pd_actuators.py# Actuator parity test comparing external torque PD vs native position
-│   ├── gen_docs_tables.py     # Code generator keeping README/FIDELITY tables synchronized
-│   ├── record_replay.py       # Record/replay runner for bit-reproducibility analysis
-│   └── test_cli_runner.py     # Automation runner executing menlo status/stand/damp
-└── upstream/                  # Cloned official repos (asimov-1, asimov-mjlab, isaac_asimov)
+├── tests/                     # 66 comprehensive unit and integration tests
+├── FIDELITY.md                # Provenance & fidelity audit for every command and field
+└── reports/raw/               # Raw benchmarks, flight data recordings, and test logs
 ```
 
 ---
 
-## 2. Viewing the Model in MuJoCo & Checking Progress
+## 11. Extension Hooks for Future Work
 
-### A. Quick Standalone 3D Viewer (No servers needed)
-To immediately view and interact with the robot standing in MuJoCo:
-```bash
-cd /Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/vasimov
-/Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/.venv/bin/mjpython stand.py --viewer
-```
-*(Press Space to pause/unpause, double-click bodies to select, Ctrl+right-click drag to apply perturbation forces).*
-
-### B. Launch Virtual Edge with Interactive Passive Viewer & Web Dashboard
-To run the full Virtual Edge stack (UDP wire protocol + Web Dashboard + MuJoCo 3D window):
-```bash
-/Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/.venv/bin/mjpython -m edge --transport udp --realtime --viewer
-```
-Once launched:
-1. **Interactive MuJoCo 3D Viewer** renders real-time physics on your desktop.
-2. **Observability Web Dashboard** is live at: [http://127.0.0.1:8852/](http://127.0.0.1:8852/)
-3. **Sim-only Ground-Truth Stream** streams at 50 Hz on `ws://127.0.0.1:8854`.
-4. **Official SDK / CLI** connects via UDP ports `8850` (commands) and `8851` (state).
-
----
-
-## 3. Running Tests and Benchmarks
-
-```bash
-# 1. Run all 49 unit and integration tests (Adapter, Enums, State Machine, SDK, Battery, Dashboard, Motor Model)
-.venv/bin/python -m unittest discover tests/ -v
-
-# 2. Run Record / Replay determinism verification (verifies bit-identical reproducibility)
-.venv/bin/python tools/record_replay.py
-
-# 3. Run 60-second telemetry timing benchmarks
-.venv/bin/python tools/benchmark_timing.py
-
-# 4. Run PD actuator parity comparison
-.venv/bin/python tools/compare_pd_actuators.py
-```
-
----
-
-## 4. Master Specification Tables
-
-*Generated automatically via `tools/gen_docs_tables.py` directly from `config/joints.yaml` and wire protobuf definitions.*
-
-### Unified Wire Protocol Enum Mapping
-
-| State / Intent | `asimov.io.ControlMode` (Wire / Firmware) | `edge_cloud.Mode` (Command) | `edge_cloud.FirmwareMode` (Telemetry) | Official Meaning |
-| :--- | :---: | :---: | :---: | :--- |
-| **`STAND`** | **`1`** (`CONTROL_MODE_STAND`) | **`0`** (`MODE_STAND`) | **`1`** (`FW_MODE_STAND`) | Robot holds or ramps into upright standing pose. |
-| **`DAMP`** | **`0`** (`CONTROL_MODE_DAMP`) | **`1`** (`MODE_DAMP`) | **`0`** (`FW_MODE_DAMP`) | Actuators compliant ($K_p=0$). |
-| **`MOVE`** | **`2`** (`CONTROL_MODE_MOVE`) | *N/A (via policy/trajectory)* | **`2`** (`FW_MODE_MOVE`) | Active motion control (trajectory streaming or policy). |
-| **`FAULT_DAMP`** | **`5`** (`CONTROL_MODE_FAULT_DAMP`) | *N/A (latched fault)* | *Reports 0 (DAMP)* | Latched safety fault (fall/overtemp); STAND refused. |
-
-### 25-Joint Actuator Specifications & PD Gains
-
-| CAN / FW Idx | Firmware Name | Sim Joint Name | Effort Limit (N·m) | Velocity Limit (rad/s) | $K_p$ (N·m/rad) | $K_d$ (N·m·s/rad) | Gain Status |
-| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
-| 0 | `L_Hip_Pitch` | `left_hip_pitch_joint` | 45.0 | 12.57 | 250.0 | 5.0 | VERIFIED (Training sim baseline) |
-| 1 | `L_Hip_Roll` | `left_hip_roll_joint` | 45.0 | 3.98 | 250.0 | 5.0 | VERIFIED (Training sim baseline) |
-| 2 | `L_Hip_Yaw` | `left_hip_yaw_joint` | 28.0 | 5.45 | 250.0 | 5.0 | VERIFIED (Training sim baseline) |
-| 3 | `L_Knee` | `left_knee_joint` | 45.0 | 12.25 | 250.0 | 5.0 | VERIFIED (Training sim baseline) |
-| 4 | `L_Ankle_A` | `left_ankle_pitch_joint` | 40.0 | 9.32 | 250.0 | 5.0 | VERIFIED (Training sim / Pushrods) |
-| 5 | `L_Ankle_B` | `left_ankle_roll_joint` | 17.0 | 9.32 | 250.0 | 5.0 | VERIFIED (Training sim / Pushrods) |
-| 6 | `R_Hip_Pitch` | `right_hip_pitch_joint` | 45.0 | 12.57 | 250.0 | 5.0 | VERIFIED (Training sim baseline) |
-| 7 | `R_Hip_Roll` | `right_hip_roll_joint` | 45.0 | 3.98 | 250.0 | 5.0 | VERIFIED (Training sim baseline) |
-| 8 | `R_Hip_Yaw` | `right_hip_yaw_joint` | 28.0 | 5.45 | 250.0 | 5.0 | VERIFIED (Training sim baseline) |
-| 9 | `R_Knee` | `right_knee_joint` | 45.0 | 12.25 | 250.0 | 5.0 | VERIFIED (Training sim baseline) |
-| 10 | `R_Ankle_A` | `right_ankle_pitch_joint` | 40.0 | 9.32 | 250.0 | 5.0 | VERIFIED (Training sim / Pushrods) |
-| 11 | `R_Ankle_B` | `right_ankle_roll_joint` | 17.0 | 9.32 | 250.0 | 5.0 | VERIFIED (Training sim / Pushrods) |
-| 12 | `L_Shoulder_Pitch` | `left_shoulder_pitch_joint` | 30.0 | 3.98 | 80.0 | 3.0 | VERIFIED (Typical hardware range 40-150 / 2-5) |
-| 13 | `L_Shoulder_Roll` | `left_shoulder_roll_joint` | 25.0 | 12.25 | 80.0 | 3.0 | VERIFIED (Typical hardware range 40-150 / 2-5) |
-| 14 | `L_Shoulder_Yaw` | `left_shoulder_yaw_joint` | 20.0 | 5.45 | 80.0 | 3.0 | VERIFIED (Typical hardware range 40-150 / 2-5) |
-| 15 | `L_Elbow` | `left_elbow_joint` | 12.0 | 9.32 | 80.0 | 3.0 | VERIFIED (Typical hardware range 40-150 / 2-5) |
-| 16 | `L_Wrist_Yaw` | `left_wrist_yaw_joint` | 12.0 | 9.32 | 80.0 | 3.0 | VERIFIED (Typical hardware range 40-150 / 2-5) |
-| 17 | `R_Shoulder_Pitch` | `right_shoulder_pitch_joint` | 30.0 | 3.98 | 80.0 | 3.0 | VERIFIED (Typical hardware range 40-150 / 2-5) |
-| 18 | `R_Shoulder_Roll` | `right_shoulder_roll_joint` | 25.0 | 12.25 | 80.0 | 3.0 | VERIFIED (Typical hardware range 40-150 / 2-5) |
-| 19 | `R_Shoulder_Yaw` | `right_shoulder_yaw_joint` | 20.0 | 5.45 | 80.0 | 3.0 | VERIFIED (Typical hardware range 40-150 / 2-5) |
-| 20 | `R_Elbow` | `right_elbow_joint` | 12.0 | 9.32 | 80.0 | 3.0 | VERIFIED (Typical hardware range 40-150 / 2-5) |
-| 21 | `R_Wrist_Yaw` | `right_wrist_yaw_joint` | 12.0 | 9.32 | 80.0 | 3.0 | VERIFIED (Typical hardware range 40-150 / 2-5) |
-| 22 | `Waist_Yaw` | `waist_yaw_joint` | 40.0 | 12.57 | 100.0 | 4.0 | VERIFIED (Training sim baseline) |
-| 23 | `Neck_Yaw` | `neck_yaw_joint` | 12.0 | 9.32 | 40.0 | 2.0 | ASSUMED (Derived neck joints) |
-| 24 | `Neck_Pitch` | `neck_pitch_joint` | 12.0 | 9.32 | 40.0 | 2.0 | ASSUMED (Derived neck joints) |
-
+The system's modular architecture enables drop-in extensions without rewriting the simulator:
+- **Vision-Language-Action (VLM)**: Connect external planners to `console.core.command_velocity()` or trajectory endpoints.
+- **Custom Reinforcement Learning Policies**: Swap the ONNX model in `edge/policy.py` or inherit from `PolicyController`.
+- **Custom Simulated Sensors**: Add new sensor extractions in `edge/sim.py:get_state()` and format in `edge/telemetry.py`.
+- **Procedural Terrains & Scenarios**: Define new scenes in `edge/environment.py:PRESETS`.
+- **Hardware Integration**: The UDP wire protocol (`edge/transports/udp_transport.py`) matches the official Menlo firmware wire protocol.

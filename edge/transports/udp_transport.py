@@ -174,12 +174,13 @@ class UdpEdgeTransport:
             try:
                 dest = (self.state_host, self.state_port)
                 # Snapshot sim sensors
-                data = self.backend.data
-                sim_pos = [float(data.qpos[adr]) for adr in self.backend.actuator_qposadr]
-                sim_vel = [float(data.qvel[adr]) for adr in self.backend.actuator_dofadr]
-                base_quat = [float(data.qpos[3]), float(data.qpos[4]), float(data.qpos[5]), float(data.qpos[6])]
-                base_gyro = [float(data.qvel[3]), float(data.qvel[4]), float(data.qvel[5])]
-                projected_gravity = list(compute_projected_gravity(np.array(base_quat)))
+                with self.backend._lock:
+                    data = self.backend.data
+                    sim_pos = [float(data.qpos[adr]) for adr in self.backend.actuator_qposadr]
+                    sim_vel = [float(data.qvel[adr]) for adr in self.backend.actuator_dofadr]
+                    base_quat = [float(data.qpos[3]), float(data.qpos[4]), float(data.qpos[5]), float(data.qpos[6])]
+                    base_gyro = [float(data.qvel[3]), float(data.qvel[4]), float(data.qvel[5])]
+                    projected_gravity = list(compute_projected_gravity(np.array(base_quat)))
 
                 # Build RobotState protobuf
                 state_msg = self.core.build_robot_state(

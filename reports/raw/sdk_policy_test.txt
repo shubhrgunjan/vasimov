@@ -1,0 +1,226 @@
+[VASIMOV ANKLE WARNING] Using approximate linear differential ankle kinematic/torque mapping (1:1 ratio, ASSUMED). Official hardware pushrod linkage geometry is unpublished. Upstream RL training sim (isaac_asimov, asimov-mjlab) controls orthogonal pitch/roll directly.
+/home/shubhr/Shubhr/Projects/vasimov/ankle_map.py:188: UserWarning: [VASIMOV ANKLE WARNING] Using approximate linear differential ankle kinematic/torque mapping (1:1 ratio, ASSUMED). Official hardware pushrod linkage geometry is unpublished. Upstream RL training sim (isaac_asimov, asimov-mjlab) controls orthogonal pitch/roll directly.
+  _default_map = DifferentialAnkleMap()
+[2026-10-02 01:14:40,812] INFO: [SIM CONTROL] Listening on http://127.0.0.1:8852
+[2026-10-02 01:14:40,813] INFO: [UDP TRANSPORT] Ready: Listening on 0.0.0.0:8850, Pushing telemetry to 127.0.0.1:8851 @ 10.0 Hz
+[2026-10-02 01:14:41,314] INFO: ======================================================================
+[2026-10-02 01:14:41,315] INFO: STARTING TASK 4 SDK POLICY VALIDATION SUITE
+[2026-10-02 01:14:41,315] INFO: ======================================================================
+[2026-10-02 01:14:41,315] INFO: 
+--- TEST 1: Confirm policy never steps in DAMP or STAND ---
+[2026-10-02 01:14:41,414] INFO: Entered DAMP: actuators compliant
+[2026-10-02 01:14:41,914] INFO: Entered STAND: ramping to default standing pose over 2.0s
+[2026-10-02 01:14:43,630] INFO: Test 1 PASS: Policy never runs in DAMP or STAND.
+[2026-10-02 01:14:43,630] INFO: 
+--- TEST 2: Full Locomotion Session (balance 20s, walk 10s) ---
+[2026-10-02 01:14:43,962] INFO: STAND ramp complete: holding default standing pose
+[2026-10-02 01:14:44,984] INFO: [SIM] STAND ramp + 1.0s settle elapsed. Auto-releasing virtual gantry.
+[2026-10-02 01:14:45,130] INFO: Calling balance()...
+[2026-10-02 01:14:45,131] INFO: [POLICY] Velocity command accepted: (vx=0.00, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:14:45,231] INFO: Holding balance in MOVE at vx=0 for 20.0s...
+[2026-10-02 01:15:05,309] INFO: Balance hold 20s complete: Mean Z = 0.6178m, Max Tilt = 3.98 deg
+[2026-10-02 01:15:05,309] INFO: Commanding forward walk vx=0.2 m/s for 10.0s...
+[2026-10-02 01:15:05,310] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:05,369] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:05,469] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:05,570] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:05,671] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:05,771] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:05,871] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:05,972] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:06,072] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:06,173] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:06,273] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:06,373] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:06,474] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:06,574] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:06,675] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:06,775] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:06,876] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:06,976] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:07,076] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:07,177] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:07,277] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:07,378] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:07,478] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:07,578] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:07,679] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:07,779] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:07,880] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:07,980] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:08,081] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:08,182] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:08,282] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:08,382] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:08,482] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:08,583] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:08,683] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:08,783] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:08,884] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:08,984] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:09,084] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:09,185] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:09,285] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:09,385] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:09,485] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:09,586] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:09,686] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:09,786] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:09,886] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:09,987] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:10,087] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:10,187] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:10,289] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:10,389] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:10,490] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:10,590] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:10,690] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:10,791] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:10,891] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:10,992] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:11,092] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:11,193] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:11,294] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:11,394] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:11,495] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:11,596] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:11,696] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:11,797] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:11,897] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:11,997] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:12,098] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:12,198] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:12,298] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:12,398] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:12,499] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:12,599] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:12,699] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:12,799] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:12,900] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:13,000] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:13,101] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:13,201] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:13,301] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:13,402] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:13,502] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:13,603] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:13,703] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:13,804] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:13,904] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:14,005] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:14,105] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:14,206] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:14,307] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:14,407] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:14,507] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:14,607] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:14,708] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:14,808] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:14,909] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:15,009] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:15,109] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:15,210] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:15,310] INFO: [POLICY] Velocity command accepted: (vx=0.00, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:15,340] INFO: Walk forward 10s complete: Mean Z = 0.6160m, Max Tilt = 4.01 deg, Delta X = 0.034m, Commanded vx = 0.20 m/s, Actual mean vx = 0.0001 m/s (error: 0.1999 m/s)
+[2026-10-02 01:15:15,340] INFO: Stopping walk (balance in place)...
+[2026-10-02 01:15:15,340] INFO: [POLICY] Velocity command accepted: (vx=0.00, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:16,341] INFO: Returning to DAMP (engaging virtual gantry)...
+[2026-10-02 01:15:16,341] INFO: [SIM] Virtual Gantry ENGAGED (pelvis locked at 0.6096m)
+[2026-10-02 01:15:16,341] INFO: Entered DAMP: actuators compliant
+[2026-10-02 01:15:16,423] INFO: Test 2 PASS: Locomotion session complete.
+[2026-10-02 01:15:16,424] INFO: 
+--- TEST 3: Velocity Staleness Test ---
+[2026-10-02 01:15:16,424] INFO: Entered STAND: ramping to default standing pose over 2.0s
+[2026-10-02 01:15:18,019] INFO: [POLICY] Velocity command accepted: (vx=0.00, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:18,023] INFO: [SIM] In MOVE/POLICY. Auto-releasing virtual gantry for locomotion.
+[2026-10-02 01:15:18,120] INFO: Sending single velocity packet vx=0.3 m/s...
+[2026-10-02 01:15:18,120] INFO: [POLICY] Velocity command accepted: (vx=0.30, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:18,121] INFO: Waiting 2.5s without velocity commands...
+[2026-10-02 01:15:20,181] INFO: [WATCHDOG] 2.0s velocity silence in MOVE/POLICY (elapsed: 2.00s). Holding zero-velocity balance.
+[2026-10-02 01:15:20,622] INFO: Test 3 PASS: Stale velocity command held at zero (current_vx = 0.0) in MOVE/POLICY.
+[2026-10-02 01:15:20,622] INFO: [SIM] Virtual Gantry ENGAGED (pelvis locked at 0.6096m)
+[2026-10-02 01:15:20,622] INFO: Entered DAMP: actuators compliant
+[2026-10-02 01:15:20,724] INFO: 
+--- TEST 4: Fall while walking -> FAULT_DAMP -> Restart ---
+[2026-10-02 01:15:20,724] INFO: Entered STAND: ramping to default standing pose over 2.0s
+[2026-10-02 01:15:22,320] INFO: [POLICY] Velocity command accepted: (vx=0.00, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:22,323] INFO: [SIM] In MOVE/POLICY. Auto-releasing virtual gantry for locomotion.
+[2026-10-02 01:15:22,422] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:22,428] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:22,528] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:22,629] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:22,729] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:22,829] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:22,930] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:23,030] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:23,130] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:23,230] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:23,331] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:23,423] INFO: Injecting fall fault while walking...
+[2026-10-02 01:15:23,423] WARNING: [FAULT INJECTION] Injecting fall fault
+[2026-10-02 01:15:23,513] WARNING: the robot fault-DAMPed while set_velocity(vx=0.20, vy=0.00, vyaw=0.00) was held: the hold is released and nothing more is sent
+[2026-10-02 01:15:23,523] INFO: Robot correctly latched in FAULT_DAMP (error_flags=0x101)
+[2026-10-02 01:15:23,524] INFO: Executing virtual restart...
+[2026-10-02 01:15:23,524] INFO: [RESTART] Virtual firmware restart requested: clearing all fault latches
+[2026-10-02 01:15:23,826] INFO: Test 4 PASS: Fall latched FAULT_DAMP; virtual restart restored clean DAMP.
+[2026-10-02 01:15:23,913] INFO: 
+--- TEST 5: CLI Verification (menlo balance & menlo walk) ---
+[2026-10-02 01:15:24,014] INFO: Entered STAND: ramping to default standing pose over 2.0s
+[2026-10-02 01:15:26,085] INFO: STAND ramp complete: holding default standing pose
+[2026-10-02 01:15:26,214] INFO: Running: menlo balance -y
+[2026-10-02 01:15:27,089] INFO: [POLICY] Velocity command accepted: (vx=0.00, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:27,093] INFO: [SIM] In MOVE/POLICY. Auto-releasing virtual gantry for locomotion.
+[2026-10-02 01:15:27,264] INFO: CLI balance stdout: vasimov (udp, 127.0.0.1) · STAND, armed · battery 100 % → balance: MOVE at zero velocity, the walking policy balances the robot
+Balancing in MOVE: ready to walk, e.g. menlo walk --vx 0.3 --duration 3
+[2026-10-02 01:15:27,265] INFO: Running: menlo walk -y --vx 0.2 --duration 3.0
+[2026-10-02 01:15:27,481] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:27,514] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:27,614] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:27,714] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:27,814] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:27,915] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:28,015] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:28,115] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:28,216] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:28,316] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:28,416] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:28,516] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:28,617] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:28,717] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:28,817] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:28,918] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:29,018] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:29,119] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:29,219] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:29,319] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:29,419] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:29,520] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:29,620] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:29,720] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:29,820] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:29,921] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:30,021] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:30,121] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:30,222] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:30,322] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:30,422] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:30,523] INFO: [POLICY] Velocity command accepted: (vx=0.00, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:30,523] INFO: [POLICY] Velocity command accepted: (vx=0.00, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:30,668] INFO: CLI walk stdout: vasimov (udp, 127.0.0.1) · MOVE · battery 100 % → walk vx 0.20 m/s, vy 0.00 m/s, vyaw 0.00 rad/s for 3.0 s, then balance in place
+Walking. Ctrl-C ends the walk.
+Walk done. Robot mode MOVE, balancing in place.
+[2026-10-02 01:15:30,713] INFO: [SIM] Virtual Gantry ENGAGED (pelvis locked at 0.6096m)
+[2026-10-02 01:15:30,713] INFO: Entered DAMP: actuators compliant
+[2026-10-02 01:15:30,913] INFO: Test 5 PASS: Official CLI commands executed successfully.
+[2026-10-02 01:15:30,913] INFO: 
+--- TEST 6: Real-Time Factor (RTF) Measurement with Policy Running ---
+[2026-10-02 01:15:30,914] INFO: Entered STAND: ramping to default standing pose over 2.0s
+[2026-10-02 01:15:31,137] INFO: [POLICY] Velocity command accepted: (vx=0.20, vy=0.00, vyaw=0.00) -> Mode MOVE/POLICY
+[2026-10-02 01:15:31,137] INFO: [SIM] In MOVE/POLICY. Auto-releasing virtual gantry for locomotion.
+[2026-10-02 01:15:31,297] INFO: [WATCHDOG] 2.0s velocity silence in MOVE/POLICY (elapsed: 2.00s). Holding zero-velocity balance.
+[2026-10-02 01:15:31,351] INFO: Fast mode policy execution: 2.50s sim time executed in 0.213s -> RTF: 11.72x
+[2026-10-02 01:15:31,351] INFO: 
+Saved Task 4 test results to /home/shubhr/Shubhr/Projects/vasimov/reports/raw/sdk_policy_test.json
+[2026-10-02 01:15:31,351] INFO: ======================================================================
+[2026-10-02 01:15:31,351] INFO: ALL TASK 4 SDK & CLI POLICY TESTS PASSED CLEANLY
+[2026-10-02 01:15:31,351] INFO: ======================================================================

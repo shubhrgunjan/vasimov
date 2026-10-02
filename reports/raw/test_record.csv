@@ -1,0 +1,2 @@
+sim_time,control_mode,edge_mode,cmd_vx,cmd_vy,cmd_wz,base_x,base_y,base_z,body_vx,body_vy,body_wz,left_contact,right_contact,left_force_z,right_force_z
+0.0000,policy,DAMP,0.0000,0.0000,0.0000,0.0000,0.0000,0.6096,0.0000,0.0000,0.0000,1,1,295.87,295.80

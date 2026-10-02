@@ -337,6 +337,10 @@
     <jointpos name="neck_pitch_joint_pos" joint="neck_pitch_joint" />
     <jointvel name="neck_pitch_joint_vel" joint="neck_pitch_joint" />
     <actuatorfrc name="neck_pitch_joint_force" actuator="neck_pitch_joint_actuator" />
+    <touch name="left_foot_touch" site="left_foot" />
+    <touch name="right_foot_touch" site="right_foot" />
+    <force name="left_foot_force" site="left_foot" />
+    <force name="right_foot_force" site="right_foot" />
   </sensor>
   <visual>
     <headlight diffuse="0.6 0.6 0.6" ambient="0.1 0.1 0.1" specular="0.9 0.9 0.9" />

@@ -142,6 +142,11 @@ class EdgeCore:
         self.current_vy: float = 0.0
         self.current_vyaw: float = 0.0
 
+        # POLICY tracking
+        self.current_policy_targets: Tuple[float, ...] = self.default_pose_sim
+        self.current_policy_kp: Tuple[float, ...] = self.default_kp
+        self.current_policy_kd: Tuple[float, ...] = self.default_kd
+
         # Safety & Fault Latching
         self.fault_latched: bool = False
         self.fault_fall: bool = False
@@ -263,9 +268,14 @@ class EdgeCore:
         vx: float,
         vy: float,
         vyaw: float,
-        controller: str = "sdk",
+        controller: Union[str, float] = "sdk",
+        current_time: Optional[float] = None,
     ) -> bool:
-        """Handle Velocity command (hits NoPolicy stub)."""
+        """Handle Velocity command: transitions STAND -> MOVE/POLICY with contract clipping."""
+        if isinstance(controller, (int, float)):
+            current_time = float(controller)
+            controller = "sdk"
+
         if controller != self.active_controller:
             log.debug("Velocity dropped: inactive controller '%s'", controller)
             return False
@@ -280,16 +290,21 @@ class EdgeCore:
             log.debug("Velocity dropped: robot in DAMP / FAULT_DAMP")
             return False
 
-        # NoPolicy Stub: Log loudly, stay in STAND, do not pretend to walk
-        log.warning(
-            "[VASIMOV NO-POLICY STUB] Velocity command received (vx=%.2f, vy=%.2f, vyaw=%.2f). "
-            "No locomotion policy running; staying in STAND and holding position.",
-            vx, vy, vyaw
+        from edge.policy import PolicyController
+        cvx, cvy, cvyaw = PolicyController.clip_velocity_command(vx, vy, vyaw)
+
+        # Transition to MOVE/POLICY
+        now = self.sim_time if self.sim_time > 0 else time.monotonic()
+        self.mode = EdgeMode.MOVE
+        self.move_submode = MoveSubmode.POLICY
+        self.current_vx = cvx
+        self.current_vy = cvy
+        self.current_vyaw = cvyaw
+        self.last_velocity_time = now
+        log.info(
+            "[POLICY] Velocity command accepted: (vx=%.2f, vy=%.2f, vyaw=%.2f) -> Mode MOVE/POLICY",
+            cvx, cvy, cvyaw
         )
-        self.current_vx = vx
-        self.current_vy = vy
-        self.current_vyaw = vyaw
-        self.last_velocity_time = time.monotonic()
         return True
 
     # ── Watchdogs & Safety Monitor ───────────────────────────────────────────
@@ -346,6 +361,18 @@ class EdgeCore:
                 )
                 self.mode = EdgeMode.DAMP
                 self.move_submode = MoveSubmode.NONE
+
+        # 3b. Policy velocity staleness (2.0s silence in MOVE/POLICY -> zero-velocity hold)
+        if self.mode == EdgeMode.MOVE and self.move_submode == MoveSubmode.POLICY:
+            if current_time - self.last_velocity_time > VELOCITY_HOLD_TIMEOUT_S:
+                if self.current_vx != 0.0 or self.current_vy != 0.0 or self.current_vyaw != 0.0:
+                    log.info(
+                        "[WATCHDOG] 2.0s velocity silence in MOVE/POLICY (elapsed: %.2fs). Holding zero-velocity balance.",
+                        current_time - self.last_velocity_time
+                    )
+                    self.current_vx = 0.0
+                    self.current_vy = 0.0
+                    self.current_vyaw = 0.0
 
         # 4. Stand ramp progress
         if self.mode == EdgeMode.STAND and not self.stand_settled:
@@ -494,6 +521,10 @@ class EdgeCore:
         # 3. MOVE / TRAJECTORY: stream targets directly
         if self.mode == EdgeMode.MOVE and self.move_submode == MoveSubmode.TRAJECTORY:
             return self.current_trajectory_targets, self.current_trajectory_kp, self.current_trajectory_kd
+
+        # 4. MOVE / POLICY: stream policy targets
+        if self.mode == EdgeMode.MOVE and self.move_submode == MoveSubmode.POLICY:
+            return self.current_policy_targets, self.current_policy_kp, self.current_policy_kd
 
         # Fallback
         return self.default_pose_sim, self.default_kp, self.default_kd

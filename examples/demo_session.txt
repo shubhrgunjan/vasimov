@@ -1,0 +1,25 @@
+# Virtual Asimov 1 — Interactive Demo Session Commands
+# Can be run interactively or automated via: ./run_sim.sh --script examples/demo_session.txt
+stand
+state
+walk 0.4
+io
+contacts
+joints
+pause
+step 2
+resume
+stop
+mode manual
+select 4
+set 0.60
+mode hybrid
+walk 0.30
+push 50 x 0.1
+env load obstacle_basic
+reset 42
+record start demo_session
+walk 0.35
+record stop
+replay demo_session
+quit

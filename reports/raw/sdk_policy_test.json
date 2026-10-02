@@ -1,0 +1,55 @@
+{
+  "meta": {
+    "os": "Linux 6.17.0-29-generic",
+    "python": "3.12.3",
+    "mujoco": "3.14.0",
+    "onnxruntime": "1.30.0",
+    "realtime_mode": true
+  },
+  "subtests": {
+    "mode_safety_damp_stand": {
+      "verdict": "PASS",
+      "policy_stepped_in_damp": false,
+      "policy_stepped_in_stand": false
+    },
+    "locomotion_session": {
+      "verdict": "PASS",
+      "balance_10s": {
+        "mean_pelvis_z_m": 0.6177858097408947,
+        "max_tilt_deg": 3.9231758984266665,
+        "survived_10s": true
+      },
+      "walk_10s": {
+        "commanded_vx_m_s": 0.4,
+        "mean_actual_vx_m_s": 0.3234375,
+        "vx_tracking_error_m_s": 0.07656250000000003,
+        "displacement_m": 2.9162,
+        "survived_10s": true,
+        "raw_1hz_csv": "/home/shubhr/Shubhr/Projects/vasimov/reports/raw/task4_sdk_walk_log.csv"
+      }
+    },
+    "staleness_test": {
+      "verdict": "PASS",
+      "initial_vx": 0.3,
+      "stale_vx_after_2s": 0.0,
+      "remained_in_policy": true
+    },
+    "fall_and_restart": {
+      "verdict": "PASS",
+      "latched_mode": "FAULT_DAMP",
+      "stand_refused_while_faulted": true,
+      "restart_cleared_fault": true
+    },
+    "cli_verification": {
+      "verdict": "PASS",
+      "menlo_balance_exit_code": 0,
+      "menlo_walk_exit_code": 0,
+      "cli_walk_displacement_m": 0.8078
+    },
+    "real_time_factor": {
+      "verdict": "PASS",
+      "fast_mode_rtf": 7.77010849766254,
+      "realtime_mode_rtf": 1.0
+    }
+  }
+}

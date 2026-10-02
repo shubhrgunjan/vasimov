@@ -1,15 +1,17 @@
 {
-  "recording_path": "/Users/admin/Projects/Asimov-Reverse-Engeneering/asminov-test/vasimov/reports/raw/run_recording.npz",
+  "recording_path": "/home/shubhr/Shubhr/Projects/vasimov/reports/raw/run_recording.npz",
   "total_steps": 1200,
   "duration_s": 6.0,
-  "replay_wall_time_s": 0.5059854159990209,
-  "replay_rtf": 11.858049284194408,
+  "replay_wall_time_s": 0.3999048959999527,
+  "replay_rtf": 15.003567248150693,
   "config_hashes": {
     "gains.yaml": "248d823f13d90109e9522b40cff00b38d657d6bb80d4d3951c7ce8ea5d53d1b2",
     "joints.yaml": "76c81a2b07e7f309e233ac0d23c45c068ceb08db4a6003ce7a33c3d07ac1e3d8",
     "motors.yaml": "8191fb8546fcf62dbe3eb4d1baac0dedbdcf1e00cde327f9d33a2f01b1aca259",
     "asimov_1_vasimov.xml": "119b9362c416789ae8f8faef3b19ca03fc8633c91525558bf818464a6244d335",
-    "combined_config_hash": "23fabd9006b3f4efa90622a47d529d49809b2d5e025e69c134fbdfa77d2ddc70"
+    "policy.onnx": "47f70691ecd5afda2933b2e6430d2375004c943552284172a2d7b28b84188a0c",
+    "env.yaml": "bfccfef91349e19c3a422b4aa5ca8ed23f5fe593bd79086cd239f7e4bcfd6bf8",
+    "combined_config_hash": "d48735e8ee8c19abcc2e8e11392e9582d2cdaf94d18444a51bf5434b85d932e0"
   },
   "is_bit_identical": true,
   "tolerances": {

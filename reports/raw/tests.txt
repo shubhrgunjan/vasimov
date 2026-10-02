@@ -1,0 +1,122 @@
+[VASIMOV ANKLE WARNING] Using approximate linear differential ankle kinematic/torque mapping (1:1 ratio, ASSUMED). Official hardware pushrod linkage geometry is unpublished. Upstream RL training sim (isaac_asimov, asimov-mjlab) controls orthogonal pitch/roll directly.
+/home/shubhr/Shubhr/Projects/vasimov/ankle_map.py:188: UserWarning: [VASIMOV ANKLE WARNING] Using approximate linear differential ankle kinematic/torque mapping (1:1 ratio, ASSUMED). Official hardware pushrod linkage geometry is unpublished. Upstream RL training sim (isaac_asimov, asimov-mjlab) controls orthogonal pitch/roll directly.
+  _default_map = DifferentialAnkleMap()
+test_ankle_kinematics_roundtrip (test_adapter.TestJointAdapter.test_ankle_kinematics_roundtrip) ... ok
+test_ankle_torque_roundtrip (test_adapter.TestJointAdapter.test_ankle_torque_roundtrip) ... ok
+test_ankle_velocity_roundtrip (test_adapter.TestJointAdapter.test_ankle_velocity_roundtrip) ... ok
+test_default_standing_pose_mapping (test_adapter.TestJointAdapter.test_default_standing_pose_mapping) ... ok
+test_full_vector_roundtrip (test_adapter.TestJointAdapter.test_full_vector_roundtrip) ... ok
+test_invalid_length_raises (test_adapter.TestJointAdapter.test_invalid_length_raises) ... ok
+test_joint_counts_and_names (test_adapter.TestJointAdapter.test_joint_counts_and_names) ... ok
+test_virtual_work_conservation (test_adapter.TestJointAdapter.test_virtual_work_conservation)
+Verify that tau_a * v_a + tau_b * v_b == tau_p * v_p + tau_r * v_r. ... ok
+test_joint_limits_clipping (test_ankle_map.TestAnkleMap.test_joint_limits_clipping)
+Test clipping for joint angles and actuator torques. ... ok
+test_non_unity_ratios (test_ankle_map.TestAnkleMap.test_non_unity_ratios)
+Verify behavior with non-unity crank transmission ratios. ... ok
+test_roundtrip_ab_to_pr_to_ab (test_ankle_map.TestAnkleMap.test_roundtrip_ab_to_pr_to_ab)
+Test that ab -> pr -> ab recovers original actuator angles. ... ok
+test_roundtrip_pr_to_ab_to_pr (test_ankle_map.TestAnkleMap.test_roundtrip_pr_to_ab_to_pr)
+Test that pr -> ab -> pr recovers original pitch and roll. ... ok
+test_velocity_and_virtual_work_consistency (test_ankle_map.TestAnkleMap.test_velocity_and_virtual_work_consistency)
+Verify velocity mapping and that virtual power is strictly preserved: ... ok
+test_battery_default_state (test_battery.TestVirtualBattery.test_battery_default_state)
+Default battery state is 100% SoC, 48V, no protection, linear discharge OFF. ... ok
+test_linear_discharge (test_battery.TestVirtualBattery.test_linear_discharge)
+Test optional linear discharge over time. ... ok
+test_sdk_wire_parse_and_preflight (test_battery.TestVirtualBattery.test_sdk_wire_parse_and_preflight)
+Test decode through Menlo SDK wire parser and preflight evaluation. ... ok
+test_virtual_restart_resets_battery (test_battery.TestVirtualBattery.test_virtual_restart_resets_battery)
+Virtual restart resets battery to 100% and discharge rate to 0. ... ok
+test_boot_defaults (test_edge_core.TestEdgeCore.test_boot_defaults) ... ok
+test_damp_to_move_dropped_silently (test_edge_core.TestEdgeCore.test_damp_to_move_dropped_silently)
+No DAMP->MOVE: trajectory and velocity in DAMP are dropped silently. ... ok
+test_drop_rules (test_edge_core.TestEdgeCore.test_drop_rules) ... Trajectory dropped: length 24 != 25
+Trajectory dropped: contains non-finite values
+Velocity dropped: non-finite velocity command (inf, 0.0, 0.0)
+ok
+test_fall_detection_latching_and_restart (test_edge_core.TestEdgeCore.test_fall_detection_latching_and_restart) ... [SAFETY FAULT] Fall detected: projected gravity z=-0.30 > -0.50 (tilt > 60 deg). Latching FAULT_DAMP.
+STAND command rejected: firmware latched in FAULT_DAMP (error_flags=0x101)
+ok
+test_overtemp_hysteresis (test_edge_core.TestEdgeCore.test_overtemp_hysteresis) ... [FAULT INJECTION] Injecting overtemp (82.0 C)
+ok
+test_policy_velocity_in_stand (test_edge_core.TestEdgeCore.test_policy_velocity_in_stand)
+In STAND, velocity command transitions to MOVE/POLICY and clips velocity. ... ok
+test_stand_transition_and_ramp (test_edge_core.TestEdgeCore.test_stand_transition_and_ramp) ... ok
+test_telemetry_builders (test_edge_core.TestEdgeCore.test_telemetry_builders) ... ok
+test_trajectory_streaming_and_watchdog (test_edge_core.TestEdgeCore.test_trajectory_streaming_and_watchdog) ... [WATCHDOG] 2.0s trajectory silence in MOVE/TRAJECTORY (elapsed: 2.10s). Triggering auto-DAMP.
+ok
+test_edge_event_and_diagnostics_roundtrip (test_edge_proto_roundtrip.TestEdgeProtoRoundtripAndFaults.test_edge_event_and_diagnostics_roundtrip)
+Build diagnostics and controller EdgeEvents, serialize, parse back. ... ok
+test_edge_telemetry_roundtrip (test_edge_proto_roundtrip.TestEdgeProtoRoundtripAndFaults.test_edge_telemetry_roundtrip)
+Build EdgeTelemetry, serialize to bytes, parse back, and verify fields. ... ok
+test_overtemp_self_clearing_vs_fall_latched (test_edge_proto_roundtrip.TestEdgeProtoRoundtripAndFaults.test_overtemp_self_clearing_vs_fall_latched)
+Verify overtemp self-clears below 70 C while fall stays latched until restart. ... [FAULT INJECTION] Injecting overtemp (85.0 C)
+STAND command rejected: firmware latched in FAULT_DAMP (error_flags=0x9)
+[FAULT INJECTION] Injecting fall fault
+STAND command rejected: firmware latched in FAULT_DAMP (error_flags=0x101)
+STAND command rejected: firmware latched in FAULT_DAMP (error_flags=0x101)
+ok
+test_asimov_common_control_modes (test_enums.TestWireProtocolEnums.test_asimov_common_control_modes)
+asimov.io.ControlMode wire numbers. ... ok
+test_edge_cloud_command_modes (test_enums.TestWireProtocolEnums.test_edge_cloud_command_modes)
+menlo.edge.Mode (CloudCommand.mode). Note the inversion trap! ... ok
+test_edge_cloud_telemetry_firmware_modes (test_enums.TestWireProtocolEnums.test_edge_cloud_telemetry_firmware_modes)
+menlo.edge.FirmwareMode (EdgeTelemetry.fw_mode). ... ok
+test_edge_mode_enum_parity (test_enums.TestWireProtocolEnums.test_edge_mode_enum_parity)
+vasimov.edge.core.EdgeMode matches asimov_common_pb2.ControlMode. ... ok
+test_dashboard_http_endpoints (test_ground_truth_and_dashboard.TestGroundTruthAndDashboard.test_dashboard_http_endpoints)
+Assert SimControlServer serves index.html, /ground_truth, and /status. ... ok
+test_frame_schema (test_ground_truth_and_dashboard.TestGroundTruthAndDashboard.test_frame_schema)
+Assert ground-truth frame contains all required fields and no hardware equivalent. ... ok
+test_websocket_stream_client (test_ground_truth_and_dashboard.TestGroundTruthAndDashboard.test_websocket_stream_client)
+Assert client can connect to WebSocket stream and receive live frames. ... ok
+test_l0_pd_and_clipping (test_motor_model.TestMotorModel.test_l0_pd_and_clipping)
+L0: Verify standard PD law and clipping to effort limit. ... ok
+test_l1_velocity_dependent_torque_limit (test_motor_model.TestMotorModel.test_l1_velocity_dependent_torque_limit)
+L1: Verify speed-dependent torque derating envelope tau_max(w). ... ok
+test_l2_rotor_armature_and_damping (test_motor_model.TestMotorModel.test_l2_rotor_armature_and_damping)
+L2: Verify armature and damping parameters are populated for all motors. ... ok
+test_l3_command_lag_and_delay (test_motor_model.TestMotorModel.test_l3_command_lag_and_delay)
+L3: Verify first-order command lag filter and discrete step delay. ... ok
+test_l4_thermal_and_current_not_modeled (test_motor_model.TestMotorModel.test_l4_thermal_and_current_not_modeled)
+L4: Verify current and temperature return 'NOT MODELED' without fabricated values. ... ok
+test_finite_actions_at_default_pose (test_policy_contract.TestPolicyContract.test_finite_actions_at_default_pose)
+Inference on synthetic upright default state must yield finite actions within [-1, 1]. ... ok
+test_observation_length_and_order_with_synthetic_upright_state (test_policy_contract.TestPolicyContract.test_observation_length_and_order_with_synthetic_upright_state)
+Build observation vector with synthetic upright default state and assert 78-D contract. ... ok
+test_onnx_io_shapes_and_types (test_policy_contract.TestPolicyContract.test_onnx_io_shapes_and_types)
+Assert ONNX model takes [1, 78] float32 obs and returns [1, 23] float32 actions. ... ok
+test_shared_observation_and_action_equivalence (test_policy_contract.TestPolicyContract.test_shared_observation_and_action_equivalence)
+Feeding identical recorded states to both standalone and edge must yield identical obs and actions. ... ok
+test_fall_never_reports_return_time (test_push_metrics.TestPushMetrics.test_fall_never_reports_return_time)
+A fall must NEVER report a return time or settle time (must be N/A or -1.0). ... ok
+test_survival_reports_valid_or_na_metrics (test_push_metrics.TestPushMetrics.test_survival_reports_valid_or_na_metrics)
+Under mild push (40 N), robot survives and tracks deviations separately. ... ok
+test_tilt_vector_definition (test_push_metrics.TestPushMetrics.test_tilt_vector_definition)
+Verify tilt is exactly the angle between rotated local z-axis and world z-axis. ... ok
+test_01_connect_and_preflight (test_sdk_integration.TestSdkIntegration.test_01_connect_and_preflight)
+Verify unmodified Robot connects over UDP and passes preflight. ... ok
+test_02_damp_and_stand_transitions (test_sdk_integration.TestSdkIntegration.test_02_damp_and_stand_transitions)
+Verify damp() and stand() work and robot arms in STAND. ... ok
+test_03_trajectory_streaming_and_watchdog (test_sdk_integration.TestSdkIntegration.test_03_trajectory_streaming_and_watchdog)
+Stream trajectory at 50 Hz moving arm joints, then verify auto-DAMP on silence. ... [WATCHDOG] 2.0s trajectory silence in MOVE/TRAJECTORY (elapsed: 2.00s). Triggering auto-DAMP.
+ok
+test_04_damp_drop_rules (test_sdk_integration.TestSdkIntegration.test_04_damp_drop_rules)
+Verify that in DAMP, motion commands are refused by SDK or dropped. ... ok
+test_05_balance_and_locomotion_policy_in_move (test_sdk_integration.TestSdkIntegration.test_05_balance_and_locomotion_policy_in_move)
+Verify balance() transitions STAND -> MOVE with official locomotion policy running. ... ok
+test_06_safety_fault_fall_and_restart (test_sdk_integration.TestSdkIntegration.test_06_safety_fault_fall_and_restart)
+Inject fall fault: verify FAULT_DAMP latches, STAND refused, restart clears. ... [FAULT INJECTION] Injecting fall fault
+ok
+test_07_ankle_roundtrip_and_enum_trap (test_sdk_integration.TestSdkIntegration.test_07_ankle_roundtrip_and_enum_trap)
+Verify ankle mapping round trip and enum numbers. ... ok
+test_08_sdk_ankle_trajectory_and_limits (test_sdk_integration.TestSdkIntegration.test_08_sdk_ankle_trajectory_and_limits)
+Via Robot.trajectory command small ankle pitch/roll changes and verify limits. ... ok
+test_09_gantry_inactive_in_move_policy (test_sdk_integration.TestSdkIntegration.test_09_gantry_inactive_in_move_policy)
+Assert that virtual gantry is inactive in MOVE/POLICY unless explicitly toggled. ... ok
+
+----------------------------------------------------------------------
+Ran 57 tests in 20.488s
+
+OK

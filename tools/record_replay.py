@@ -47,6 +47,8 @@ def compute_config_hash() -> Dict[str, str]:
         _VASIMOV_DIR / "config" / "joints.yaml",
         _VASIMOV_DIR / "config" / "motors.yaml",
         _VASIMOV_DIR / "model" / "asimov_1_vasimov.xml",
+        _VASIMOV_DIR / "assets" / "policy" / "policy.onnx",
+        _VASIMOV_DIR / "assets" / "policy" / "env.yaml",
     ]
     hashes = {}
     combined = hashlib.sha256()
@@ -78,13 +80,15 @@ def run_recording(duration_s: float = 6.0) -> Dict[str, Any]:
 
     commands_log = []
 
-    # Command schedule:
+    # Command schedule (Walking run with official locomotion policy):
     # Step 0 (t=0.0s): Boot in DAMP
     # Step 100 (t=0.5s): Command STAND
-    # Step 600 (t=3.0s): Gantry auto-releases (settled stand)
-    # Step 800 (t=4.0s): Apply 50 N sagittal push for 0.1s
+    # Step 700 (t=3.5s): Gantry auto-releases (settled stand)
+    # Step 800 (t=4.0s): Command velocity forward (vx=0.2 m/s) -> enters MOVE/POLICY
+    # Step 1100 (t=5.5s): Command velocity zero (balance in place)
     stand_step = int(round(0.5 / dt))
-    push_step = int(round(4.0 / dt))
+    walk_step = int(round(4.0 / dt))
+    stop_step = int(round(5.5 / dt))
 
     for step in range(total_steps):
         sim_time = backend.data.time
@@ -99,16 +103,28 @@ def run_recording(duration_s: float = 6.0) -> Dict[str, Any]:
                 "command": "stand",
             })
 
-        if step == push_step:
-            log.info("Step %d (t=%.3fs): Issuing apply_push(50.0 N, 'x', 0.1s)", step, sim_time)
-            backend.apply_push(force_n=50.0, direction="x", duration_s=0.1)
+        if step == walk_step:
+            log.info("Step %d (t=%.3fs): Issuing command_velocity(vx=0.2, vy=0.0, vyaw=0.0)", step, sim_time)
+            core.command_velocity(vx=0.2, vy=0.0, vyaw=0.0)
             commands_log.append({
                 "step": step,
                 "time": sim_time,
-                "command": "push",
-                "force_n": 50.0,
-                "direction": "x",
-                "duration_s": 0.1,
+                "command": "velocity",
+                "vx": 0.2,
+                "vy": 0.0,
+                "vyaw": 0.0,
+            })
+
+        if step == stop_step:
+            log.info("Step %d (t=%.3fs): Issuing command_velocity(vx=0.0, vy=0.0, vyaw=0.0) [balance]", step, sim_time)
+            core.command_velocity(vx=0.0, vy=0.0, vyaw=0.0)
+            commands_log.append({
+                "step": step,
+                "time": sim_time,
+                "command": "velocity",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vyaw": 0.0,
             })
 
         # Step physics
@@ -172,6 +188,8 @@ def run_replay(recording_data: Dict[str, Any]) -> Dict[str, Any]:
                 core.command_stand(current_sim_pos=[float(backend.data.qpos[adr]) for adr in backend.actuator_qposadr], current_time=sim_time)
             elif cmd_type == "push":
                 backend.apply_push(force_n=cmd["force_n"], direction=cmd["direction"], duration_s=cmd["duration_s"])
+            elif cmd_type == "velocity":
+                core.command_velocity(vx=cmd["vx"], vy=cmd["vy"], vyaw=cmd["vyaw"])
 
         # Step physics
         backend.step()

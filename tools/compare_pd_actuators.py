@@ -123,9 +123,10 @@ def run_test(model_path: Path, is_native: bool, apply_push: bool = False, push_f
 
         mujoco.mj_step(model, data)
 
-        tau_norm = float(np.max(np.abs(data.actuator_force if is_native else data.ctrl)))
-        if tau_norm > max_torque:
-            max_torque = tau_norm
+        if (not apply_push) or (step >= push_start_step):
+            tau_norm = float(np.max(np.abs(data.actuator_force if is_native else data.ctrl)))
+            if tau_norm > max_torque:
+                max_torque = tau_norm
 
         z = float(data.qpos[2])
         r, p, tilt = quat_to_roll_pitch(data.qpos[3:7])

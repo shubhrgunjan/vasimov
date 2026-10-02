@@ -56,7 +56,12 @@ def quat_to_roll_pitch(quat: np.ndarray) -> Tuple[float, float, float]:
     sinp = 2.0 * (w * y - z * x)
     pitch = np.arcsin(np.clip(sinp, -1.0, 1.0)) * 180.0 / np.pi
 
-    tilt = np.sqrt(roll**2 + pitch**2)
+    # Exact tilt: angle between pelvis up-axis (local [0, 0, 1]) and world up [0, 0, 1]
+    # In world coordinates, pelvis local z-axis dot [0, 0, 1] is R[2, 2] = (w^2 - x^2 - y^2 + z^2) / norm^2
+    norm_sq = w * w + x * x + y * y + z * z
+    pelvis_up_z = (w * w - x * x - y * y + z * z) / norm_sq if norm_sq > 1e-9 else 1.0
+    tilt = float(np.arccos(np.clip(pelvis_up_z, -1.0, 1.0)) * 180.0 / np.pi)
+
     return float(roll), float(pitch), float(tilt)
 
 
@@ -158,10 +163,15 @@ def run_stand_sim(
 
     # Push tracking
     pre_push_pos = np.zeros(3)
+    pre_push_roll = 0.0
     pre_push_pitch = 0.0
     pre_push_tilt = 0.0
     push_peak_disp = 0.0
     push_peak_tilt = 0.0
+    push_peak_tilt_dev = 0.0
+    push_peak_roll_dev = 0.0
+    push_peak_pitch_dev = 0.0
+    push_max_torque = 0.0
     return_time: Optional[float] = None
     settle_time: Optional[float] = None
     pre_push_captured = False
@@ -190,7 +200,8 @@ def run_stand_sim(
 
     def step_simulation(step_idx: int) -> None:
         nonlocal max_tilt_deg, max_roll_deg, max_pitch_deg, max_torque_applied, fell, l1_bound
-        nonlocal pre_push_pos, pre_push_pitch, pre_push_tilt, push_peak_disp, push_peak_tilt
+        nonlocal pre_push_pos, pre_push_roll, pre_push_pitch, pre_push_tilt, push_peak_disp, push_peak_tilt
+        nonlocal push_peak_tilt_dev, push_peak_roll_dev, push_peak_pitch_dev, push_max_torque
         nonlocal return_time, settle_time, pre_push_captured, last_log_t, cached_torques
 
         current_t = data.time
@@ -232,7 +243,7 @@ def run_stand_sim(
         if apply_push:
             if current_t < push_time:
                 pre_push_pos = np.copy(data.qpos[:3])
-                _, pre_push_pitch, pre_push_tilt = quat_to_roll_pitch(data.qpos[3:7])
+                pre_push_roll, pre_push_pitch, pre_push_tilt = quat_to_roll_pitch(data.qpos[3:7])
                 pre_push_captured = True
             elif push_time <= current_t < (push_time + push_duration):
                 is_pushing = True
@@ -262,15 +273,27 @@ def run_stand_sim(
         if current_z < 0.40 or tilt_d > 30.0:
             fell = True
 
-        # 5. Push response metrics
+        # 5. Push response metrics (evaluated after push start)
         if apply_push and current_t >= push_time and pre_push_captured:
             disp = float(np.linalg.norm(pelvis_pos - pre_push_pos))
             push_peak_disp = max(push_peak_disp, disp)
             push_peak_tilt = max(push_peak_tilt, tilt_d)
 
-            # Time to return within 0.2 deg and 2 mm
+            roll_dev = abs(roll_d - pre_push_roll)
+            pitch_dev = abs(pitch_d - pre_push_pitch)
+            tilt_dev = abs(tilt_d - pre_push_tilt)
+            height_dev = abs(current_z - pre_push_pos[2])
+
+            push_peak_roll_dev = max(push_peak_roll_dev, roll_dev)
+            push_peak_pitch_dev = max(push_peak_pitch_dev, pitch_dev)
+            push_peak_tilt_dev = max(push_peak_tilt_dev, tilt_dev)
+
+            # Torque stats only after push start
+            push_max_torque = max(push_max_torque, peak_tq)
+
+            # Return time: defined on tilt deviation (<0.2 deg) and height (<2 mm), N/A for falls
             if current_t > (push_time + push_duration) and not fell:
-                if abs(current_z - pre_push_pos[2]) <= 0.002 and abs(pitch_d - pre_push_pitch) <= 0.2:
+                if height_dev <= 0.002 and tilt_dev <= 0.2:
                     if return_time is None:
                         return_time = current_t - (push_time + push_duration)
 
@@ -346,20 +369,26 @@ def run_stand_sim(
     pitch_pass = max_pitch_dev_deg < 0.1
     overall_pass = drift_pass and pitch_pass and (not fell)
 
-    # Compute settle time after push (Task 0.3)
-    if apply_push and not fell and len(last3_indices) > 0:
+    # Compute settle time after push (Task 0.1: defined on tilt deviation + height, N/A for falls)
+    if apply_push and not fell and pre_push_captured:
         push_end_t = push_time + push_duration
         for i, t in enumerate(history_t):
             if t > push_end_t:
-                # Check if all subsequent samples stay within 1 mm and 0.1 deg of settled values
                 all_settled = True
                 for j in range(i, len(history_t)):
-                    if abs(history_z[j] - settled_height) > 0.001 or abs(history_pitch[j] - mean_pitch) > 0.1:
+                    h_dev = abs(history_z[j] - pre_push_pos[2])
+                    t_dev = abs(history_tilt[j] - pre_push_tilt)
+                    if h_dev > 0.001 or t_dev > 0.1:
                         all_settled = False
                         break
                 if all_settled:
                     settle_time = t - push_end_t
                     break
+
+    # If the robot fell, return_time and settle_time MUST be None (N/A)
+    if fell:
+        return_time = None
+        settle_time = None
 
     if not quiet:
         print("\n" + "=" * 80)
@@ -377,9 +406,12 @@ def run_stand_sim(
             print("PUSH DISTURBANCE METRICS (Report-Only)")
             print(f"Force Applied:          {push_force:.1f} N for {push_duration:.2f} s in +{push_dir}")
             print(f"Peak Displacement:      {push_peak_disp * 100.0:.2f} cm")
-            print(f"Peak Tilt:              {push_peak_tilt:.2f}°")
-            print(f"Time to Return (<2mm/<0.2°): {f'{return_time:.3f} s' if return_time is not None else 'N/A'}")
-            print(f"Time to Settle (<1mm/<0.1°): {f'{settle_time:.3f} s' if settle_time is not None else 'N/A'}")
+            print(f"Peak Tilt:              {push_peak_tilt:.2f}° (Dev: {push_peak_tilt_dev:.2f}°)")
+            print(f"Peak Roll Deviation:    {push_peak_roll_dev:.2f}°")
+            print(f"Peak Pitch Deviation:   {push_peak_pitch_dev:.2f}°")
+            print(f"Post-Push Peak Torque:  {push_max_torque:.1f} N*m")
+            print(f"Time to Return (<2mm/<0.2° tilt): {f'{return_time:.3f} s' if return_time is not None else 'N/A'}")
+            print(f"Time to Settle (<1mm/<0.1° tilt): {f'{settle_time:.3f} s' if settle_time is not None else 'N/A'}")
             print(f"L1 Torque Saturation Bound:  {l1_bound}")
         print("=" * 80)
         print(f"OVERALL VERDICT:        {'PASS' if overall_pass else 'FAIL'}")
@@ -396,9 +428,12 @@ def run_stand_sim(
         "drift_rate_mm_s": drift_rate_mm_s,
         "max_pitch_dev_deg": max_pitch_dev_deg,
         "max_tilt_deg": max_tilt_deg,
-        "max_torque": max_torque_applied,
+        "max_torque": push_max_torque if apply_push else max_torque_applied,
         "push_peak_disp_cm": push_peak_disp * 100.0,
         "push_peak_tilt_deg": push_peak_tilt,
+        "push_peak_tilt_dev_deg": push_peak_tilt_dev,
+        "push_peak_roll_dev_deg": push_peak_roll_dev,
+        "push_peak_pitch_dev_deg": push_peak_pitch_dev,
         "return_time_s": return_time if return_time is not None else -1.0,
         "settle_time_s": settle_time if settle_time is not None else -1.0,
         "l1_bound": l1_bound,
@@ -414,23 +449,26 @@ def run_push_sweep(model_path: Path, config_path: Path, csv_output: Optional[Pat
         csv_output = Path(__file__).resolve().parent / "reports" / "raw" / "push_sweep.csv"
     csv_output.parent.mkdir(parents=True, exist_ok=True)
 
-    print("=" * 95)
-    print("TASK 0.1 / 0.3 PUSH SWEEP BENCHMARK (Report-Only: 40, 80, 120, 160 N for 0.1 s)")
+    print("=" * 115)
+    print("TASK 0.1 PUSH SWEEP BENCHMARK (40, 80, 120, 160 N for 0.1 s; tilt = angle pelvis up to world up)")
     print(f"Output CSV: {csv_output}")
-    print("=" * 95)
-    print(f"{'Dir':<5} {'Force (N)':<10} {'Status':<10} {'Peak Disp':<12} {'Peak Tilt':<12} {'Return (s)':<12} {'Settle (s)':<12} {'Max Tau':<10} {'L1 Bound'}")
-    print("-" * 95)
+    print("=" * 115)
+    print(f"{'Dir':<5} {'Force':<8} {'Status':<10} {'Disp(cm)':<10} {'Tilt(deg)':<10} {'TiltDev':<10} {'RollDev':<10} {'PitchDev':<10} {'Return':<10} {'Settle':<10} {'MaxTau':<8} {'L1'}")
+    print("-" * 115)
 
     first_fall: Dict[str, Optional[float]] = {"x": None, "y": None}
     csv_rows = []
 
     for p_dir in directions:
-        dir_label = "Sagittal (+x)" if p_dir == "x" else "Lateral (+y)"
         for f in forces:
+            traj_csv0 = csv_output.parent / f"push_run_{p_dir}_{int(f)}N.csv"
+            traj_csv1 = csv_output.parent / f"push_run_{p_dir}_{int(f)}N_l1.csv"
+
             # Run without L1
             res0 = run_stand_sim(
                 model_path=model_path,
                 config_path=config_path,
+                output_csv=traj_csv0,
                 duration=10.0,
                 apply_push=True,
                 push_force=f,
@@ -442,6 +480,7 @@ def run_push_sweep(model_path: Path, config_path: Path, csv_output: Optional[Pat
             res1 = run_stand_sim(
                 model_path=model_path,
                 config_path=config_path,
+                output_csv=traj_csv1,
                 duration=10.0,
                 apply_push=True,
                 push_force=f,
@@ -458,7 +497,7 @@ def run_push_sweep(model_path: Path, config_path: Path, csv_output: Optional[Pat
             if res0["fell"] and first_fall[p_dir] is None:
                 first_fall[p_dir] = f
 
-            print(f"{p_dir:<5} {f:<10.0f} {status:<10} {res0['push_peak_disp_cm']:<12.2f} {res0['push_peak_tilt_deg']:<12.2f} {ret_str:<12} {set_str:<12} {res0['max_torque']:<10.1f} {l1_str}")
+            print(f"{p_dir:<5} {f:<8.0f} {status:<10} {res0['push_peak_disp_cm']:<10.2f} {res0['push_peak_tilt_deg']:<10.2f} {res0['push_peak_tilt_dev_deg']:<10.2f} {res0['push_peak_roll_dev_deg']:<10.2f} {res0['push_peak_pitch_dev_deg']:<10.2f} {ret_str:<10} {set_str:<10} {res0['max_torque']:<8.1f} {l1_str}")
 
             csv_rows.append({
                 "direction": p_dir,
@@ -467,26 +506,31 @@ def run_push_sweep(model_path: Path, config_path: Path, csv_output: Optional[Pat
                 "fell": res0["fell"],
                 "peak_disp_cm": f"{res0['push_peak_disp_cm']:.2f}",
                 "peak_tilt_deg": f"{res0['push_peak_tilt_deg']:.2f}",
+                "peak_tilt_dev_deg": f"{res0['push_peak_tilt_dev_deg']:.2f}",
+                "peak_roll_dev_deg": f"{res0['push_peak_roll_dev_deg']:.2f}",
+                "peak_pitch_dev_deg": f"{res0['push_peak_pitch_dev_deg']:.2f}",
                 "return_time_s": ret_str,
                 "settle_time_s": set_str,
                 "max_torque_nm": f"{res0['max_torque']:.2f}",
                 "l1_bound": res1["l1_bound"],
                 "knee_effort_limit_nm": 45.0,
                 "knee_velocity_limit_rad_s": 12.25,
+                "trajectory_file": traj_csv0.name,
             })
 
-    print("-" * 95)
+    print("-" * 115)
     print("FIRST FALL SUMMARY:")
     print(f"  * Sagittal (+x): First fall at {first_fall['x']} N")
     print(f"  * Lateral (+y):  First fall at {first_fall['y']} N")
-    print("=" * 95)
+    print("=" * 115)
 
     import csv
     with open(csv_output, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=[
             "direction", "force_n", "status", "fell", "peak_disp_cm",
-            "peak_tilt_deg", "return_time_s", "settle_time_s", "max_torque_nm",
-            "l1_bound", "knee_effort_limit_nm", "knee_velocity_limit_rad_s"
+            "peak_tilt_deg", "peak_tilt_dev_deg", "peak_roll_dev_deg", "peak_pitch_dev_deg",
+            "return_time_s", "settle_time_s", "max_torque_nm",
+            "l1_bound", "knee_effort_limit_nm", "knee_velocity_limit_rad_s", "trajectory_file"
         ])
         writer.writeheader()
         writer.writerows(csv_rows)

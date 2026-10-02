@@ -1,0 +1,24 @@
+# Test batch script for interactive console verification
+stand
+state
+walk 0.4
+state
+io
+contacts
+pause
+step 2
+resume
+stop
+joints
+select 4
+set 0.6
+mode hybrid
+walk 0.3
+state
+env load obstacle_basic
+reset
+record start demo_test
+walk 0.4
+record stop
+replay demo_test
+quit

@@ -42,7 +42,7 @@ from menlo.asimov import (
 )
 from asimov_protocol.v1 import asimov_common_pb2, edge_cloud_pb2
 
-from edge.core import EdgeCore, EdgeMode
+from edge.core import EdgeCore, EdgeMode, MoveSubmode
 from edge.sim import SimBackend, SimControlServer
 from edge.transports.udp_transport import UdpEdgeTransport, COMMAND_PORT, STATE_PORT
 from adapter import JointAdapter, SIM_JOINTS
@@ -98,6 +98,14 @@ class TestSdkIntegration(unittest.TestCase):
         cls.transport.stop()
         cls.control_server.stop()
 
+    def tearDown(self):
+        """Ensure clean state for next test."""
+        if self.core.fault_latched:
+            self.core.virtual_restart()
+        self.backend.reset()
+        self.core.command_damp("sdk")
+        time.sleep(0.1)
+
     def _post_control(self, payload: dict) -> dict:
         """Helper to post to local HTTP control server."""
         conn = http.client.HTTPConnection("127.0.0.1", 8852, timeout=2.0)
@@ -143,6 +151,10 @@ class TestSdkIntegration(unittest.TestCase):
             state = robot.get_state()
             self.assertEqual(state.mode, Mode.STAND)
             self.assertTrue(robot.armed)
+
+            # Wait for the 2.0s linear posture ramp to complete and settle
+            time.sleep(1.5)
+            state = robot.get_state()
 
             # Check that joint positions are near the official default pose
             default_fw = self.core.default_pose_fw
@@ -199,18 +211,26 @@ class TestSdkIntegration(unittest.TestCase):
             self.assertFalse(check.ok)
             self.assertTrue(check.has("wrong_mode"))
 
-    def test_05_velocity_in_stand_hits_nopolicy(self):
-        """Verify velocity commands in STAND hit NoPolicy stub and stay in STAND."""
+    def test_05_balance_and_locomotion_policy_in_move(self):
+        """Verify balance() transitions STAND -> MOVE with official locomotion policy running."""
         cfg = ConnectionConfig(udp=UdpConfig(host="127.0.0.1"))
         with Robot(cfg).connect("udp", timeout=3.0) as robot:
             robot.stand(wait=True, timeout=6.0)
 
-            # Calling balance() sends zero velocity to enter MOVE;
-            # Virtual Edge NoPolicy stub intercepts velocity, logs loudly, and remains in STAND
-            robot.balance(wait=False)
+            # Calling balance() sends zero velocity and waits for Mode.MOVE
+            sent = robot.balance(wait=True, timeout=4.0)
+            self.assertIsNotNone(sent)
             time.sleep(0.2)
             state = robot.get_state()
-            self.assertEqual(state.mode, Mode.STAND)
+            self.assertEqual(state.mode, Mode.MOVE)
+
+            # Verify policy is actively stepping
+            self.assertEqual(self.core.mode, EdgeMode.MOVE)
+            self.assertEqual(self.core.move_submode, MoveSubmode.POLICY)
+
+            # Return to DAMP cleanly
+            robot.damp(wait=True, timeout=2.0)
+            self.assertEqual(robot.get_state().mode, Mode.DAMP)
 
     def test_06_safety_fault_fall_and_restart(self):
         """Inject fall fault: verify FAULT_DAMP latches, STAND refused, restart clears."""
@@ -318,6 +338,12 @@ class TestSdkIntegration(unittest.TestCase):
             valid_targets[4] = -0.428
             valid_targets[5] = 0.380
 
+            # Engage virtual gantry at nominal root height so ankle kinematics can be tested without ground contact interference
+            with self.backend._lock:
+                self.backend.data.qpos[2] = 0.639
+                self.backend.set_gantry(True)
+                self.backend.model.eq_data[self.backend.gantry_eq_id, 3:6] = [0.0, 0.0, -0.639]
+
             # Stream at 50 Hz for 0.5 s (25 steps)
             for _ in range(25):
                 robot.trajectory(valid_targets, timeout=0.0)
@@ -333,6 +359,82 @@ class TestSdkIntegration(unittest.TestCase):
             roll = -(state.joints[4].pos + state.joints[5].pos) / (2 * robots.ANKLE_K_ROLL)
             self.assertAlmostEqual(pitch, -0.20, delta=0.04)
             self.assertAlmostEqual(roll, 0.03, delta=0.03)
+
+    def test_08_loaded_gantry_off_reports_tracking_error(self):
+        """Loaded variant of test_08 with gantry OFF: reports ankle tracking error under ground contact."""
+        cfg = ConnectionConfig(udp=UdpConfig(host="127.0.0.1", command_port=8850))
+        with Robot(cfg).connect("udp", timeout=3.0) as robot:
+            robot.stand(wait=True, timeout=6.0)
+            time.sleep(1.5)  # Wait for 2.0s stand ramp + settle; gantry auto-releases
+
+            # Ensure virtual gantry is explicitly OFF
+            self.backend.set_gantry(False)
+            self.assertFalse(self.backend.gantry_active)
+
+            current_targets = list(robot.get_state().joint_pos)
+            valid_targets = list(current_targets)
+            valid_targets[4] = -0.428
+            valid_targets[5] = 0.380
+
+            # Stream at 50 Hz for 0.5 s (25 steps) while standing loaded on ground
+            for _ in range(25):
+                robot.trajectory(valid_targets, timeout=0.0)
+                time.sleep(0.02)
+
+            time.sleep(0.1)
+            state = robot.get_state()
+
+            # Measure tracking errors (REPORTS ONLY - no assertion on error magnitude)
+            target_m4 = -0.428
+            target_m5 = 0.380
+            err_m4 = abs(state.joints[4].pos - target_m4)
+            err_m5 = abs(state.joints[5].pos - target_m5)
+
+            target_pitch = -0.20
+            target_roll = 0.03
+            pitch = (state.joints[4].pos - state.joints[5].pos) / (2 * robots.ANKLE_K_PITCH)
+            roll = -(state.joints[4].pos + state.joints[5].pos) / (2 * robots.ANKLE_K_ROLL)
+            err_pitch = abs(pitch - target_pitch)
+            err_roll = abs(roll - target_roll)
+
+            # Report tracking error
+            print(
+                f"\n[REPORT test_08_loaded_gantry_off] Ankle Tracking Error under Ground Load: "
+                f"pitch_err={err_pitch:.4f} rad, roll_err={err_roll:.4f} rad, "
+                f"motor4_err={err_m4:.4f} rad, motor5_err={err_m5:.4f} rad, "
+                f"pelvis_z={self.backend.data.qpos[2]:.4f}m, gantry_active={self.backend.gantry_active}"
+            )
+            # Safe cleanup back to DAMP
+            robot.damp(wait=True, timeout=2.0)
+
+    def test_09_gantry_inactive_in_move_policy(self):
+        """Assert that virtual gantry is inactive in MOVE/POLICY unless explicitly toggled."""
+        cfg = ConnectionConfig(udp=UdpConfig(host="127.0.0.1"))
+        with Robot(cfg).connect("udp", timeout=3.0) as robot:
+            robot.stand(wait=True, timeout=6.0)
+            time.sleep(1.2) # wait for settle + auto-release
+            robot.balance(wait=True, timeout=4.0)
+
+            # In MOVE/POLICY, gantry must be released
+            self.assertEqual(robot.get_state().mode, Mode.MOVE)
+            self.assertFalse(self.backend.gantry_active, "Gantry must be inactive in MOVE/POLICY")
+
+            # Command velocity vx = 0.4 m/s
+            robot.set_velocity(vx=0.4, vy=0.0, vyaw=0.0, duration=1.0, wait=False)
+            time.sleep(0.2)
+            self.assertFalse(self.backend.gantry_active, "Gantry must remain inactive during walking")
+
+            # Explicitly toggle gantry ON via API
+            res_on = self._post_control({"command": "gantry", "state": "on"})
+            self.assertEqual(res_on.get("status"), "ok")
+            self.assertTrue(self.backend.gantry_active, "Gantry must be active when user toggles it ON")
+
+            # Explicitly toggle gantry OFF via API
+            res_off = self._post_control({"command": "gantry", "state": "off"})
+            self.assertEqual(res_off.get("status"), "ok")
+            self.assertFalse(self.backend.gantry_active, "Gantry must be inactive when user toggles it OFF")
+
+            robot.damp(wait=True, timeout=2.0)
 
 
 if __name__ == "__main__":

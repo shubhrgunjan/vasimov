@@ -17,7 +17,7 @@ Per project requirements, every item is strictly labeled into one of four catego
 | `mode = CONTROL_MODE_STAND` | **`REAL-EQUIVALENT`** | Initiates smooth 2.0s linear joint trajectory ramp from current pose to default standing pose (`config/joints.yaml`). Verified against SDK `Robot.stand()`. |
 | `mode = CONTROL_MODE_DAMP` | **`REAL-EQUIVALENT`** | Sets joint stiffness $K_p = 0$, $K_d = 2.0$. If virtual gantry is released, robot physically collapses under gravity. Verified against SDK `Robot.damp()`. |
 | `all_trajectory` (`JointSegment`) | **`REAL-EQUIVALENT`** | 25 positions in firmware order. Validates finite values, enforces 25-element length, supports optional per-packet $K_p/K_d$ overrides. Monitored by 2.0s trajectory watchdog (auto-DAMP on silence). |
-| `policy` (Velocity $v_x, v_y, v_\text{yaw}$) | **`PLACEHOLDER`** | **NoPolicy Stub**: Neural locomotion policy is out of scope for Step 3. Edge logs loudly (`[VASIMOV NO-POLICY STUB]`), remains in `STAND`, and holds position without pretending to walk. Zero-velocity hold watchdog active after 2.0s silence. |
+| `policy` (Velocity $v_x, v_y, v_\text{yaw}$) | **`REAL-EQUIVALENT`** | Locomotion policy controller running official pretrained model `Menlo/asimov1-locomotion-0818` (checkpoint: `REAL`, pinned commit `18114a730668a983423e6361f0522eb62c76cb74`). Stepped at 50 Hz on sim time. Observations and actions are `REAL-EQUIVALENT` where verified directly against `env.yaml` (78-D observation, 23-D action scaled by 0.25). Transitions `STAND -> MOVE/POLICY` with velocity clipped to contract bounds; 2.0s command silence holds zero-velocity balance. |
 | `eol` (EOL Calibration Commands) | **`NOT IMPLEMENTED`** | Factory end-of-line motor encoder zeroing and CAN ID assignment are not simulated. |
 
 ---
@@ -87,6 +87,7 @@ Per project requirements, every item is strictly labeled into one of four catego
 | Virtual Gantry | **`APPROXIMATE`** | MuJoCo `<equality><weld>` constraint fixing the pelvis link in translation and rotation at settled standing height ($z = 0.60962\text{ m}$). Active at boot; auto-released 1.0s after STAND ramp finishes; controllable via localhost HTTP API `:8852`. |
 | Fall Detection | **`APPROXIMATE/ASSUMED`** | Trips when projected gravity $g_z > -0.50$ (tilt $> 60^\circ$). Documented in SDK comments as the firmware trip threshold, but classified ASSUMED without firmware C source. Latches `FAULT_DAMP` mode and `error_flags = 0x101`; clears only via virtual restart. |
 | Thermal Safety | **`REAL-EQUIVALENT`** | Over-temperature trip at $\ge 80.0\text{ }^\circ\text{C}$ sets `FAULT_DAMP` (refusing `STAND`). Self-clears with hysteresis at $< 70.0\text{ }^\circ\text{C}$ returning to `DAMP` without requiring firmware restart. |
+| Locomotion Policy Subsystem | **`REAL / APPROXIMATE`** | Checkpoint: **`REAL`** (`Menlo/asimov1-locomotion-0818` pinned at commit `18114a730668a983423e6361f0522eb62c76cb74`). Physics: **`APPROXIMATE`** (MuJoCo 3.14.0, not Isaac Lab). Observation / Action Contract: **`REAL-EQUIVALENT`** where verified directly against `env.yaml` (78-D observation, 23-D actions, 50 Hz control decimation). |
 
 ---
 

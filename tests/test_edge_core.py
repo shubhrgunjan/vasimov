@@ -72,14 +72,22 @@ class TestEdgeCore(unittest.TestCase):
         self.assertFalse(ok_vel)
         self.assertEqual(self.core.mode, EdgeMode.DAMP)
 
-    def test_nopolicy_stub_in_stand(self):
-        """In STAND, velocity command hits NoPolicy stub and stays in STAND."""
+    def test_policy_velocity_in_stand(self):
+        """In STAND, velocity command transitions to MOVE/POLICY and clips velocity."""
         self.core.command_stand("sdk")
         self.assertEqual(self.core.mode, EdgeMode.STAND)
 
         ok = self.core.command_velocity(0.5, 0.0, 0.1, controller="sdk")
         self.assertTrue(ok)
-        self.assertEqual(self.core.mode, EdgeMode.STAND)  # Stays in STAND!
+        self.assertEqual(self.core.mode, EdgeMode.MOVE)
+        self.assertEqual(self.core.move_submode, MoveSubmode.POLICY)
+        self.assertEqual(self.core.current_vx, 0.5)
+
+        # 2.0s velocity staleness -> zero-velocity hold
+        self.core.step_state(self.core.last_velocity_time + 2.1, imu_gravity=[0.0, 0.0, -1.0])
+        self.assertEqual(self.core.mode, EdgeMode.MOVE)
+        self.assertEqual(self.core.move_submode, MoveSubmode.POLICY)
+        self.assertEqual(self.core.current_vx, 0.0)
 
     def test_trajectory_streaming_and_watchdog(self):
         self.core.command_stand("sdk")
