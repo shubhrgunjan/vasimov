@@ -90,6 +90,27 @@ class LiveViewController {
       window.telemetryManager.sendCommand("step", { n: 1 });
     });
 
+    document.getElementById("btnSafeFall")?.addEventListener("click", () => {
+      window.telemetryManager.sendCommand("safefall");
+      this.pulsePipelineNode("cmd");
+    });
+    document.getElementById("btnGetup")?.addEventListener("click", () => {
+      window.telemetryManager.sendCommand("getup");
+      this.pulsePipelineNode("cmd");
+    });
+
+    // Emotes & Gestures
+    const sendEmote = (name) => {
+      window.telemetryManager.sendCommand("emote", { name });
+      this.pulsePipelineNode("cmd");
+    };
+    document.getElementById("btnEmoteHello")?.addEventListener("click", () => sendEmote("hello"));
+    document.getElementById("btnEmoteBow")?.addEventListener("click", () => sendEmote("bow"));
+    document.getElementById("btnEmoteSquat")?.addEventListener("click", () => sendEmote("squat"));
+    document.getElementById("btnEmoteCheer")?.addEventListener("click", () => sendEmote("cheer"));
+    document.getElementById("btnEmoteDance")?.addEventListener("click", () => sendEmote("dance"));
+    document.getElementById("btnEmoteNod")?.addEventListener("click", () => sendEmote("nod"));
+
     // Control Modes
     document.querySelectorAll(".mode-btn").forEach((btn) => {
       btn.addEventListener("click", (e) => {
@@ -109,7 +130,7 @@ class LiveViewController {
       document.getElementById("btnStop")?.click();
     });
 
-    // Keyboard navigation (WASD, QE, Space, P, R)
+    // Keyboard navigation (WASD, QE, Space, P, R, F, G, H, B, C, K, T)
     window.addEventListener("keydown", (e) => {
       // Don't intercept if user is typing in an input
       if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
@@ -124,6 +145,13 @@ class LiveViewController {
       else if (key === " ") { e.preventDefault(); document.getElementById("btnStop")?.click(); }
       else if (key === "p") { e.preventDefault(); document.getElementById("btnPause")?.click(); }
       else if (key === "r") { e.preventDefault(); document.getElementById("btnReset")?.click(); }
+      else if (key === "f") { e.preventDefault(); document.getElementById("btnSafeFall")?.click(); }
+      else if (key === "g") { e.preventDefault(); document.getElementById("btnGetup")?.click(); }
+      else if (key === "h") { e.preventDefault(); sendEmote("hello"); }
+      else if (key === "b") { e.preventDefault(); sendEmote("bow"); }
+      else if (key === "c") { e.preventDefault(); sendEmote("squat"); }
+      else if (key === "k") { e.preventDefault(); sendEmote("cheer"); }
+      else if (key === "t") { e.preventDefault(); sendEmote("dance"); }
     });
 
     // Fullscreen button

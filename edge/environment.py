@@ -3,9 +3,10 @@ vasimov/edge/environment.py
 Environment and scenario management system for Virtual Asimov 1.
 
 Supports:
-- Presets: flat, friction_low, friction_high, heavy_robot, light_robot, obstacle_basic, terrain_basic
-- Custom object insertion: box, step, wall, table, cylinder
+- Presets: flat, obstacles, playground, friction_low, friction_high, heavy_robot, light_robot, obstacle_basic, terrain_basic
+- Real dynamic physics objects: boxes, balls, cylinders, trip barriers with 6-DoF freejoints, mass, inertia, and contact friction
 - Parameter configuration: ground friction, robot mass scaling, gravity
+- Runtime dynamic obstacle spawning and repositioning
 - Deterministic environment reset
 """
 
@@ -22,13 +23,128 @@ log = logging.getLogger("vasimov.edge.environment")
 _BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_MODEL_PATH = _BASE_DIR / "model" / "asimov_1_vasimov.xml"
 
-PRESETS = {
+PRESETS: Dict[str, Dict[str, Any]] = {
     "flat": {
         "description": "Standard flat horizontal plane with nominal friction (mu=1.0)",
         "ground_friction": 1.0,
         "mass_scale": 1.0,
         "gravity": [0.0, 0.0, -9.81],
         "obstacles": [],
+    },
+    "obstacles": {
+        "description": "Real physics dynamic obstacles (movable boxes, rolling ball, cylinder, trip bar)",
+        "ground_friction": 1.0,
+        "mass_scale": 1.0,
+        "gravity": [0.0, 0.0, -9.81],
+        "obstacles": [
+            {
+                "name": "dyn_box_1",
+                "type": "box",
+                "pos": [1.1, 0.0, 0.15],
+                "size": [0.12, 0.12, 0.12],
+                "mass": 3.0,
+                "dynamic": True,
+                "rgba": [0.88, 0.38, 0.15, 1.0],
+            },
+            {
+                "name": "dyn_ball_1",
+                "type": "sphere",
+                "pos": [0.75, 0.14, 0.15],
+                "size": [0.10],
+                "mass": 1.5,
+                "dynamic": True,
+                "rgba": [0.15, 0.65, 0.95, 1.0],
+            },
+            {
+                "name": "dyn_cylinder_1",
+                "type": "cylinder",
+                "pos": [1.5, -0.12, 0.18],
+                "size": [0.08, 0.16],
+                "mass": 2.5,
+                "dynamic": True,
+                "rgba": [0.95, 0.75, 0.15, 1.0],
+            },
+            {
+                "name": "dyn_trip_bar",
+                "type": "box",
+                "pos": [0.55, 0.0, 0.04],
+                "size": [0.14, 0.35, 0.04],
+                "mass": 4.5,
+                "dynamic": True,
+                "rgba": [0.85, 0.22, 0.22, 1.0],
+            },
+        ],
+    },
+    "playground": {
+        "description": "Rich dynamic physics playground arena with multi-shape interactive objects",
+        "ground_friction": 1.0,
+        "mass_scale": 1.0,
+        "gravity": [0.0, 0.0, -9.81],
+        "obstacles": [
+            {
+                "name": "play_crate_1",
+                "type": "box",
+                "pos": [1.3, 0.0, 0.16],
+                "size": [0.15, 0.15, 0.15],
+                "mass": 5.0,
+                "dynamic": True,
+                "rgba": [0.85, 0.40, 0.15, 1.0],
+            },
+            {
+                "name": "play_ball_1",
+                "type": "sphere",
+                "pos": [0.7, -0.15, 0.12],
+                "size": [0.10],
+                "mass": 1.2,
+                "dynamic": True,
+                "rgba": [0.2, 0.7, 0.9, 1.0],
+            },
+            {
+                "name": "play_ball_2",
+                "type": "sphere",
+                "pos": [1.8, 0.22, 0.15],
+                "size": [0.12],
+                "mass": 1.8,
+                "dynamic": True,
+                "rgba": [0.3, 0.85, 0.4, 1.0],
+            },
+            {
+                "name": "play_pin_1",
+                "type": "cylinder",
+                "pos": [1.0, 0.18, 0.18],
+                "size": [0.07, 0.18],
+                "mass": 2.0,
+                "dynamic": True,
+                "rgba": [0.95, 0.6, 0.2, 1.0],
+            },
+            {
+                "name": "play_pin_2",
+                "type": "cylinder",
+                "pos": [2.2, -0.18, 0.18],
+                "size": [0.07, 0.18],
+                "mass": 2.0,
+                "dynamic": True,
+                "rgba": [0.9, 0.3, 0.7, 1.0],
+            },
+            {
+                "name": "play_stumble_block",
+                "type": "box",
+                "pos": [0.5, 0.0, 0.035],
+                "size": [0.12, 0.30, 0.035],
+                "mass": 4.0,
+                "dynamic": True,
+                "rgba": [0.75, 0.15, 0.15, 1.0],
+            },
+            {
+                "name": "play_crate_2",
+                "type": "box",
+                "pos": [2.6, 0.10, 0.14],
+                "size": [0.12, 0.12, 0.12],
+                "mass": 3.0,
+                "dynamic": True,
+                "rgba": [0.4, 0.5, 0.9, 1.0],
+            },
+        ],
     },
     "friction_low": {
         "description": "Slippery low-friction ice-like ground (mu=0.2)",
@@ -59,7 +175,7 @@ PRESETS = {
         "obstacles": [],
     },
     "obstacle_basic": {
-        "description": "Flat ground with low step obstacles and blocks in walking corridor",
+        "description": "Walking corridor with real dynamic stumbling blocks and collision cubes",
         "ground_friction": 1.0,
         "mass_scale": 1.0,
         "gravity": [0.0, 0.0, -9.81],
@@ -67,21 +183,25 @@ PRESETS = {
             {
                 "name": "step_block_1",
                 "type": "box",
-                "pos": [1.5, 0.0, 0.025],
-                "size": [0.3, 0.5, 0.025],
+                "pos": [1.2, 0.0, 0.05],
+                "size": [0.15, 0.35, 0.04],
+                "mass": 4.0,
+                "dynamic": True,
                 "rgba": [0.8, 0.3, 0.2, 1.0],
             },
             {
                 "name": "step_block_2",
                 "type": "box",
-                "pos": [3.0, 0.1, 0.035],
-                "size": [0.3, 0.5, 0.035],
+                "pos": [2.5, 0.1, 0.12],
+                "size": [0.12, 0.12, 0.12],
+                "mass": 3.0,
+                "dynamic": True,
                 "rgba": [0.2, 0.6, 0.8, 1.0],
             },
         ],
     },
     "terrain_basic": {
-        "description": "Stepped multi-level terrain platforms along walking path",
+        "description": "Multi-level terrain platforms and dynamic cylinders along walking path",
         "ground_friction": 1.0,
         "mass_scale": 1.0,
         "gravity": [0.0, 0.0, -9.81],
@@ -91,6 +211,7 @@ PRESETS = {
                 "type": "box",
                 "pos": [1.2, -0.2, 0.02],
                 "size": [0.4, 0.4, 0.02],
+                "dynamic": False,
                 "rgba": [0.7, 0.7, 0.3, 1.0],
             },
             {
@@ -98,18 +219,24 @@ PRESETS = {
                 "type": "box",
                 "pos": [2.2, 0.2, 0.03],
                 "size": [0.4, 0.4, 0.03],
+                "dynamic": False,
                 "rgba": [0.4, 0.7, 0.4, 1.0],
             },
             {
                 "name": "terrain_cylinder_marker",
                 "type": "cylinder",
-                "pos": [3.5, 0.0, 0.15],
-                "size": [0.08, 0.15, 0.0],
+                "pos": [3.2, 0.0, 0.18],
+                "size": [0.08, 0.18],
+                "mass": 2.5,
+                "dynamic": True,
                 "rgba": [0.9, 0.5, 0.1, 1.0],
             },
         ],
     },
 }
+
+# Alias for ease of access
+PRESETS["physics_obstacles"] = PRESETS["obstacles"]
 
 
 class EnvironmentManager:
@@ -126,12 +253,12 @@ class EnvironmentManager:
 
     def list_presets(self) -> Dict[str, str]:
         """Return dict of available preset names to descriptions."""
-        return {name: cfg["description"] for name, cfg in PRESETS.items()}
+        return {name: cfg["description"] for name, cfg in PRESETS.items() if name != "physics_obstacles"}
 
     def get_preset_config(self, preset_name: str) -> Dict[str, Any]:
         """Return copy of preset configuration."""
         if preset_name not in PRESETS:
-            raise KeyError(f"Unknown preset '{preset_name}'. Available: {list(PRESETS.keys())}")
+            raise KeyError(f"Unknown preset '{preset_name}'. Available: {list(self.list_presets().keys())}")
         return copy.deepcopy(PRESETS[preset_name])
 
     def create_model_for_preset(self, preset_name: str) -> Tuple[mujoco.MjModel, Path]:
@@ -140,7 +267,7 @@ class EnvironmentManager:
         Generates temporary XML in model/ directory if obstacles are present.
         """
         if preset_name not in PRESETS:
-            raise KeyError(f"Unknown preset '{preset_name}'. Available: {list(PRESETS.keys())}")
+            raise KeyError(f"Unknown preset '{preset_name}'. Available: {list(self.list_presets().keys())}")
 
         cfg = copy.deepcopy(PRESETS[preset_name])
         self.current_preset = preset_name
@@ -152,29 +279,50 @@ class EnvironmentManager:
             model = mujoco.MjModel.from_xml_path(str(self.base_xml_path))
             self.generated_model_path = self.base_xml_path
         else:
-            # Inject obstacles into worldbody XML
+            # Inject obstacles into worldbody XML with full dynamic physics
             base_xml_text = self.base_xml_path.read_text(encoding="utf-8")
-            obstacle_geoms = []
+            obstacle_xmls = []
             for obs in obstacles:
                 name = obs["name"]
                 geom_type = obs.get("type", "box")
                 px, py, pz = obs.get("pos", [0, 0, 0])
-                sx, sy, sz = obs.get("size", [0.1, 0.1, 0.1])
+                raw_size = obs.get("size", [0.1, 0.1, 0.1])
                 r, g, b, a = obs.get("rgba", [0.8, 0.4, 0.2, 1.0])
+                mass = float(obs.get("mass", 3.0))
+                friction = float(obs.get("friction", 1.0))
+                dynamic = bool(obs.get("dynamic", True))
+
                 if geom_type == "cylinder":
-                    # For cylinder, size is [radius, half_length]
-                    size_str = f"{sx} {sy}"
+                    size_str = f"{raw_size[0]} {raw_size[1]}"
+                elif geom_type == "sphere":
+                    size_str = f"{raw_size[0]}"
+                else:  # box
+                    if len(raw_size) >= 3:
+                        size_str = f"{raw_size[0]} {raw_size[1]} {raw_size[2]}"
+                    else:
+                        size_str = f"{raw_size[0]} {raw_size[0]} {raw_size[0]}"
+
+                if dynamic:
+                    # 6-DoF freejoint rigid body with real mass, inertia, friction and collision
+                    body_xml = (
+                        f'    <body name="{name}" pos="{px} {py} {pz}">\n'
+                        f'      <freejoint name="{name}_joint" />\n'
+                        f'      <geom name="{name}_geom" type="{geom_type}" size="{size_str}" '
+                        f'mass="{mass}" friction="{friction} 0.005 0.0001" '
+                        f'rgba="{r} {g} {b} {a}" contype="1" conaffinity="1" />\n'
+                        f'    </body>'
+                    )
+                    obstacle_xmls.append(body_xml)
                 else:
-                    size_str = f"{sx} {sy} {sz}"
+                    # Static geom anchored to world
+                    geom_xml = (
+                        f'    <geom name="{name}" type="{geom_type}" size="{size_str}" '
+                        f'pos="{px} {py} {pz}" rgba="{r} {g} {b} {a}" contype="1" conaffinity="1" />'
+                    )
+                    obstacle_xmls.append(geom_xml)
 
-                geom_xml = (
-                    f'<geom name="{name}" type="{geom_type}" size="{size_str}" '
-                    f'pos="{px} {py} {pz}" rgba="{r} {g} {b} {a}" contype="1" conaffinity="1"/>'
-                )
-                obstacle_geoms.append(geom_xml)
-
-            injected_xml = "\n".join(obstacle_geoms)
-            modified_xml = base_xml_text.replace("</worldbody>", f"{injected_xml}\n</worldbody>")
+            injected_xml = "\n".join(obstacle_xmls)
+            modified_xml = base_xml_text.replace("</worldbody>", f"{injected_xml}\n  </worldbody>")
 
             gen_path = self.base_xml_path.parent / f"_gen_env_{preset_name}.xml"
             gen_path.write_text(modified_xml, encoding="utf-8")
@@ -183,8 +331,9 @@ class EnvironmentManager:
 
         # Apply runtime environment parameters to model
         self.apply_runtime_parameters(model, cfg)
-        log.info("[ENV] Loaded preset '%s' (friction=%.2f, mass_scale=%.2f, obstacles=%d)",
-                 preset_name, cfg["ground_friction"], cfg["mass_scale"], len(obstacles))
+        log.info("[ENV] Loaded preset '%s' (friction=%.2f, mass_scale=%.2f, obstacles=%d dynamic=%s)",
+                 preset_name, cfg["ground_friction"], cfg["mass_scale"], len(obstacles),
+                 any(obs.get("dynamic", True) for obs in obstacles))
         return model, self.generated_model_path
 
     def apply_runtime_parameters(self, model: mujoco.MjModel, cfg: Dict[str, Any]) -> None:

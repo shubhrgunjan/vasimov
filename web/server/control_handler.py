@@ -297,6 +297,45 @@ class ControlHandler:
                 ack["status"] = "rejected"
                 ack["lifecycle"]["validation"] = f"Unknown fault type '{fault}'"
 
+        # ── 12b. SAFE FALL ───────────────────────────────────────────────────
+        elif action in ("fall", "safefall", "safe_fall"):
+            res = self.backend.safe_fall()
+            ack["status"] = "accepted"
+            ack["lifecycle"]["applied"] = "Controlled safe fall -> compliant DAMP"
+            ack["lifecycle"]["simulator_result"] = f"mode = {res.get('edge_mode')}, gantry = {res.get('gantry')}"
+            self.record_event("Safe fall triggered: compliant damping engaged", level="warn")
+
+        # ── 12c. GETUP / RECOVERY ────────────────────────────────────────────
+        elif action in ("getup", "recover", "standup"):
+            res = self.backend.getup()
+            ack["status"] = "accepted"
+            ack["lifecycle"]["applied"] = "Getup recovery -> cleared faults, base restored, STAND armed"
+            ack["lifecycle"]["simulator_result"] = f"base_z = {res.get('base_z'):.4f}m, mode = {res.get('edge_mode')}"
+            self.record_event(f"Getup recovery complete: base_z={res.get('base_z', 0.61):.3f}m, STAND armed")
+
+        # ── 12d. EMOTES & GESTURES ───────────────────────────────────────────
+        elif action == "emote" or action in ("hello", "wave", "bow", "squat", "crouch", "cheer", "dance", "nod", "shake"):
+            emote_name = action if action != "emote" else str(params.get("name", params.get("emote", "hello"))).lower().strip()
+            ok = self.backend.play_emote(emote_name)
+            if ok:
+                ack["status"] = "accepted"
+                dur = self.backend.emote_controller.active_emote.duration if self.backend.emote_controller.active_emote else 3.0
+                ack["lifecycle"]["applied"] = f"Emote '{emote_name}' active ({dur:.1f}s)"
+                ack["lifecycle"]["simulator_result"] = f"Playing emote animation '{emote_name}'"
+                self.record_event(f"Emote triggered: '{emote_name}' ({dur:.1f}s)")
+            else:
+                ack["status"] = "rejected"
+                from edge.gestures import EMOTE_CATALOG
+                ack["lifecycle"]["validation"] = f"Unknown emote '{emote_name}'. Available: {list(EMOTE_CATALOG.keys())}"
+
+        # ── 12e. DYNAMIC OBSTACLE SPAWN ──────────────────────────────────────
+        elif action in ("spawn", "spawn_obstacle", "drop_obstacle"):
+            dist = float(params.get("distance", 0.8))
+            res = self.backend.spawn_dynamic_obstacle(distance=dist)
+            ack["status"] = "accepted" if res.get("status") == "spawned" else "error"
+            ack["lifecycle"]["applied"] = res.get("message", "Spawned obstacle")
+            self.record_event(f"Dynamic obstacle: {res.get('message')}")
+
         # ── 13. RECORDING ────────────────────────────────────────────────────
         elif action == "record":
             sub = str(params.get("command", "start")).lower()

@@ -39,6 +39,7 @@ sys.path.insert(0, str(_VASIMOV_DIR))
 import ankle_map
 from adapter import JointAdapter, SIM_JOINTS, FIRMWARE_JOINTS
 from edge.core import EdgeCore, EdgeMode, MoveSubmode
+from edge.gestures import EmoteController
 from motor_model import MotorModel, MotorState
 
 log = logging.getLogger("vasimov.edge.sim")
@@ -202,6 +203,9 @@ class SimBackend:
         from edge.environment import EnvironmentManager
         self.env_manager = EnvironmentManager(self.model_path)
 
+        # Emote & gesture engine
+        self.emote_controller = EmoteController(self.core.default_pose_sim)
+
         # Reset robot to settled pose with gantry active
         self.reset()
 
@@ -237,6 +241,9 @@ class SimBackend:
 
             if hasattr(self, "policy_controller") and self.policy_controller is not None:
                 self.policy_controller.reset()
+
+            if hasattr(self, "emote_controller") and self.emote_controller is not None:
+                self.emote_controller.stop_emote()
 
             # Reset interactive manual/hybrid controls & pause state
             self.manual_joint_overrides.clear()
@@ -413,6 +420,17 @@ class SimBackend:
                 else:
                     effective_kp = kp_vals
                     effective_kd = kd_vals
+
+            # Apply active emote trajectory if not in damping
+            if self.emote_controller.is_active and self.core.mode not in (EdgeMode.DAMP, EdgeMode.FAULT_DAMP):
+                emote_targets = self.emote_controller.step(self.dt)
+                if emote_targets is not None:
+                    merged_tgts = list(targets)
+                    for jn, val in emote_targets.items():
+                        if jn in SIM_JOINTS:
+                            j_idx = SIM_JOINTS.index(jn)
+                            merged_tgts[j_idx] = float(val)
+                    targets = tuple(merged_tgts)
 
             self.last_applied_targets = list(targets)
             self.last_applied_kp = list(effective_kp)
@@ -708,6 +726,169 @@ class SimBackend:
         with self._lock:
             self.manual_joint_overrides.clear()
 
+    def play_emote(self, name: str) -> bool:
+        """Trigger a gesture/emote animation."""
+        with self._lock:
+            if self.core.mode in (EdgeMode.DAMP, EdgeMode.FAULT_DAMP):
+                self.core.virtual_restart()
+                cur_pos = [float(self.data.qpos[adr]) for adr in self.actuator_qposadr]
+                self.core.command_stand("sdk", current_sim_pos=cur_pos, current_time=float(self.data.time))
+                self.core.stand_settled = True
+
+            self.core.command_velocity(0.0, 0.0, 0.0, current_time=float(self.data.time))
+            ok = self.emote_controller.start_emote(name)
+            if ok:
+                log.info("[SIM] Started emote '%s' (duration=%.1fs)", name, self.emote_controller.active_emote.duration)
+            return ok
+
+    def stop_emote(self) -> None:
+        """Stop any playing emote animation."""
+        with self._lock:
+            self.emote_controller.stop_emote()
+
+    def safe_fall(self) -> Dict[str, Any]:
+        """Perform controlled safe descent: zero commanded velocity and compliant damping descent."""
+        with self._lock:
+            self.emote_controller.stop_emote()
+            sim_t = float(self.data.time)
+            # Zero velocity command into official policy
+            self.core.command_velocity(0.0, 0.0, 0.0, current_time=sim_t)
+            # Release virtual gantry tether so descent is governed by real physics
+            if self.gantry_active:
+                self.set_gantry(False)
+            # Transition firmware into compliant damping for safe ground touchdown
+            self.core.command_damp("sdk")
+            log.warning("[SIM] Safe fall triggered: robot transitioning to compliant ground descent.")
+            return {
+                "status": "safe_fall",
+                "edge_mode": self.core.mode.name,
+                "gantry": self.gantry_active,
+                "message": "Safe fall initiated: velocity zeroed, compliant joint damping to ground.",
+            }
+
+    def getup(self) -> Dict[str, Any]:
+        """Recover robot from fallen or prone state back to stable standing using the official policy."""
+        with self._lock:
+            self.emote_controller.stop_emote()
+            self.core.virtual_restart()
+
+            # Preserve current horizontal coordinates (x, y) - NO TELEPORTATION TO ORIGIN!
+            current_x = float(self.data.qpos[0])
+            current_y = float(self.data.qpos[1])
+            current_z = float(self.data.qpos[2])
+
+            # In direct recovery mode, allow policy to run without being choked by FAULT_DAMP
+            self.core.fall_latch_enabled = False
+
+            # If robot is in a low crouch or tilted stance (z >= 0.38m), stand up dynamically via policy
+            if current_z >= 0.38 and not self.core.fault_fall:
+                cur_pos = [float(self.data.qpos[adr]) for adr in self.actuator_qposadr]
+                sim_t = float(self.data.time)
+                self.core.command_stand("sdk", current_sim_pos=cur_pos, current_time=sim_t)
+                self.control_mode = "policy"
+                log.info("[SIM] Crouch recovery: official policy extending leg actuators from z=%.2fm.", current_z)
+                msg = f"Policy dynamic stand initiated from crouch height ({current_z:.2f}m)."
+            else:
+                # Full ground recovery: restore upright base orientation and height at CURRENT (x, y) coordinates
+                self.data.qpos[0] = current_x
+                self.data.qpos[1] = current_y
+                self.data.qpos[2] = SETTLED_BASE_Z
+                self.data.qpos[3] = 1.0
+                self.data.qpos[4:7] = 0.0
+                self.data.qvel[:] = 0.0
+                mujoco.mj_forward(self.model, self.data)
+
+                # Engage virtual gantry tether at current coordinates, arm official STAND policy
+                self.set_gantry(True)
+                cur_pos = [float(self.data.qpos[adr]) for adr in self.actuator_qposadr]
+                sim_t = float(self.data.time)
+                self.core.command_stand("sdk", current_sim_pos=cur_pos, current_time=sim_t)
+                self.core.stand_settled = True
+                self.control_mode = "policy"
+                for i, jn in enumerate(SIM_JOINTS):
+                    self.manual_joint_targets[jn] = float(self.core.default_pose_sim[i])
+                self.manual_joint_overrides.clear()
+                msg = f"Robot restored upright at ({current_x:.2f}m, {current_y:.2f}m); official policy active with gantry support."
+
+            # Re-arm policy
+            self.core.fall_latch_enabled = True
+            log.info("[SIM] Getup recovery complete: base_z=%.3fm at (%.2f, %.2f), STAND armed under official policy.",
+                     float(self.data.qpos[2]), current_x, current_y)
+            return {
+                "status": "recovered",
+                "edge_mode": self.core.mode.name,
+                "base_x": current_x,
+                "base_y": current_y,
+                "base_z": float(self.data.qpos[2]),
+                "gantry": self.gantry_active,
+                "message": msg,
+            }
+
+    def spawn_dynamic_obstacle(
+        self,
+        distance: float = 0.8,
+        lateral_offset: float = 0.0,
+        height_offset: float = 0.15,
+    ) -> Dict[str, Any]:
+        """
+        Drop or reposition a dynamic physics obstacle in front of the robot based on its current heading.
+        """
+        with self._lock:
+            # Check if model has dynamic obstacle bodies
+            dyn_joint_ids = []
+            for j in range(self.model.njnt):
+                if self.model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE:
+                    b_id = self.model.jnt_bodyid[j]
+                    if b_id != self.pelvis_body_id and b_id != 0:
+                        dyn_joint_ids.append(j)
+
+            if not dyn_joint_ids:
+                # If no dynamic obstacles exist in current model, load 'obstacles' preset
+                log.info("[SIM] No dynamic obstacles in scene. Automatically loading 'obstacles' preset...")
+                self.load_environment("obstacles")
+                for j in range(self.model.njnt):
+                    if self.model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE:
+                        b_id = self.model.jnt_bodyid[j]
+                        if b_id != self.pelvis_body_id and b_id != 0:
+                            dyn_joint_ids.append(j)
+
+            if not dyn_joint_ids:
+                return {"status": "error", "message": "Failed to locate dynamic obstacle bodies in model."}
+
+            target_jnt = dyn_joint_ids[0]
+            target_body = self.model.jnt_bodyid[target_jnt]
+            body_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, target_body)
+
+            # Robot heading from base quaternion
+            base_quat = self.data.qpos[3:7]  # w, x, y, z
+            w, x, y, z = base_quat
+            yaw = np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+
+            rx = float(self.data.qpos[0])
+            ry = float(self.data.qpos[1])
+            target_x = rx + distance * np.cos(yaw) - lateral_offset * np.sin(yaw)
+            target_y = ry + distance * np.sin(yaw) + lateral_offset * np.cos(yaw)
+            target_z = max(0.12, height_offset)
+
+            qadr = self.model.jnt_qposadr[target_jnt]
+            vadr = self.model.jnt_dofadr[target_jnt]
+            self.data.qpos[qadr] = target_x
+            self.data.qpos[qadr + 1] = target_y
+            self.data.qpos[qadr + 2] = target_z
+            self.data.qpos[qadr + 3] = 1.0
+            self.data.qpos[qadr + 4: qadr + 7] = 0.0
+            self.data.qvel[vadr: vadr + 6] = 0.0
+            mujoco.mj_forward(self.model, self.data)
+
+            log.info("[SIM] Spawned dynamic obstacle '%s' at (%.2f, %.2f, %.2f) in front of robot.",
+                     body_name, target_x, target_y, target_z)
+            return {
+                "status": "spawned",
+                "obstacle": body_name,
+                "pos": [target_x, target_y, target_z],
+                "message": f"Dynamic obstacle '{body_name}' dropped at ({target_x:.2f}, {target_y:.2f}) with real physics.",
+            }
+
     def load_environment(self, preset_name: str) -> Dict[str, Any]:
         """Load an environment preset and re-initialize model/data."""
         with self._lock:
@@ -759,8 +940,11 @@ class SimBackend:
             R = self.data.xmat[self.pelvis_body_id].reshape(3, 3)
             lin_vel_body = [float(x) for x in (R.T @ np.array(lin_vel_world))]
             ang_vel_body = [float(x) for x in (R.T @ np.array(ang_vel_world))]
+            proj_grav = compute_projected_gravity(np.array(quat))
+            speed = float(np.linalg.norm(lin_vel_world[:2]))
             return {
                 "x": pos[0], "y": pos[1], "z": pos[2],
+                "pos_x": pos[0], "pos_y": pos[1], "pos_z": pos[2],
                 "pos": pos,
                 "quat": quat,
                 "roll_deg": r_deg, "pitch_deg": p_deg, "yaw_deg": y_deg,
@@ -771,6 +955,9 @@ class SimBackend:
                 "ang_vel_body": ang_vel_body,
                 "body_vx": lin_vel_body[0], "body_vy": lin_vel_body[1], "body_vz": lin_vel_body[2],
                 "body_wx": ang_vel_body[0], "body_wy": ang_vel_body[1], "body_wz": ang_vel_body[2],
+                "speed": speed,
+                "gravity_z": float(proj_grav[2]),
+                "projected_gravity": [float(x) for x in proj_grav],
             }
 
     def get_imu(self) -> Dict[str, Any]:
@@ -885,6 +1072,10 @@ class SimBackend:
                 "other_contacts": other_contacts[:10],
             }
 
+    def get_contact_state(self) -> Dict[str, Any]:
+        """Alias for get_contacts()."""
+        return self.get_contacts()
+
     def get_policy_observation(self) -> Dict[str, Any]:
         """Return 78-D observation breakdown and labeled entries."""
         with self._lock:
@@ -971,6 +1162,16 @@ class SimBackend:
                 })
             return actuators
 
+    def get_joint_torques(self) -> Dict[str, float]:
+        """Return mapping of actuator/joint name to current applied torque (Nm)."""
+        with self._lock:
+            torques = {}
+            for i in range(self.model.nu):
+                name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) or f"act_{i}"
+                tau = float(self.last_applied_torques[i]) if i < len(self.last_applied_torques) else 0.0
+                torques[name] = tau
+            return torques
+
     def get_environment_state(self) -> Dict[str, Any]:
         """Return environment configuration, ground friction, and obstacles."""
         with self._lock:
@@ -999,6 +1200,11 @@ class SimBackend:
                 "gantry_active": bool(self.gantry_active),
                 "edge_mode": self.core.mode.name,
                 "move_submode": self.core.move_submode.name,
+                "emote": {
+                    "active": bool(self.emote_controller.is_active),
+                    "name": self.emote_controller.current_emote_name,
+                    "progress": float(self.emote_controller.progress),
+                },
                 "command": {
                     "vx": float(self.core.current_vx),
                     "vy": float(self.core.current_vy),

@@ -146,33 +146,116 @@ The web dashboard is an engineering workstation interface connected to the singl
 
 ## 4. How to Control the Robot (Console & Shortcuts)
 
-When the console starts, you are presented with the interactive prompt:
+When the console starts, you are presented with an interactive, live-updating cybernetic status prompt:
 
 ```text
-asimov>
+[POLICY|STAND|z=0.61m|14.2s|G] asimov❯ 
+```
+*The status prompt continuously displays active control mode, Edge mode, floating base height $z$, simulation time, virtual gantry status `[G]`, and active emote animations.*
+
+Press **`<TAB>`** at any time for **intelligent auto-completion** of commands, sub-commands, joint names, environment presets, and emotes!
+
+### Live Game Teleoperation Mode (Drive Mode)
+Drive Asimov 1 in real time like a video game directly from your terminal! No need to hit Enter after each key.
+```bash
+# Launch directly into game teleoperation mode
+python3 tools/sim_console.py --drive
+
+# Or load with dynamic physics obstacles
+python3 tools/sim_console.py --env obstacles --drive
+```
+Or inside the console REPL, simply type:
+```text
+drive           # (or: game, teleop, live)
+```
+The terminal transforms into a **silky-smooth 25 Hz live ANSI HUD** displaying real-time MuJoCo physics, odometry, foot contact forces, and official ONNX policy state:
+```text
+╔════════════════════════════════════════════════════════════════════════════════════════════════╗
+║ 🕹️  VIRTUAL ASIMOV 1 — REAL-TIME GAME TELEOPERATION (OFFICIAL POLICY)                          ║
+╠════════════════════════════════════════════════════════════════════════════════════════════════╣
+║ SIM STATUS : RUNNING | Time:   14.82s | Mode: MOVE/POLICY   | Gantry: FREE | Fall Latch: ENABLED
+║ COMMANDS   : Vx: +0.25 m/s | Vy: +0.00 m/s | Vyaw: +0.10 rad/s
+║ ODOMETRY   : X:  +1.42m | Y:  +0.15m | Z:  0.612m | Speed: 0.26 m/s
+║ ATTITUDE   : Roll:  +0.4° | Pitch:  -1.2° | Yaw:  +5.1° | Tilt:  1.4°
+║ CONTACTS   : Left Foot: [TOUCH 19.4N] | Right Foot: [TOUCH 16.1N] | Max Tau: 18.2 N·m
+╠════════════════════════════════════════════════════════════════════════════════════════════════╣
+║ LIVE KEYBOARD CONTROLS (NO ENTER NEEDED):
+║   [W] / [S] : Forward / Backward (±0.05)   [SPACE] : Emergency Brake (Zero Velocity)
+║   [A] / [D] : Strafe Left / Right (±0.05)   [X]     : Zero Commanded Velocity
+║   [Q] / [E] : Rotate CCW / CW (±0.10 rad/s) [R]     : Arm STAND Pose
+║   [1] - [4] : Push Disturbances (40N, 80N, 150N, 250N)
+║   [O]       : Spawn / Drop Dynamic Physics Obstacle in front of robot
+║   [F]       : Controlled Safe Fall (Compliant ground descent)
+║   [G]       : Real Policy Getup Recovery (Preserves position & balances)
+║   [L]       : Toggle Fall Latch (Allow policy to run through falls)
+║   [P]       : Pause / Resume Simulation      [ESC / M] : Exit to Main Console
+╠════════════════════════════════════════════════════════════════════════════════════════════════╣
+║ FEEDBACK   : Accelerate forward: vx=+0.25 m/s
+╚════════════════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
-### Locomotion (Policy Mode)
+### Real Dynamic Physics Obstacles & Environments
+Test stumbling, collision, and balance recovery with actual 6-DoF rigid bodies (with real mass, inertia, friction, and contact dynamics):
+```text
+env load obstacles      # Movable 3kg boxes, 1.5kg rolling ball, 2.5kg cylinder, 4.5kg trip bar
+env load playground     # Multi-shape interactive arena with diverse collision objects
+spawn [dist]            # Drop a dynamic obstacle at distance (e.g. spawn 0.8) ahead of current heading
+```
+
+### Official Policy Continuous Control & Recovery
+- **Continuous Policy Execution:** Direct control simulation runs the official ONNX neural network policy (`policy.onnx`, 78 observations $\rightarrow$ 23 actions at 50 Hz).
+- **Physical Falls & Stumbles:** Robot loses balance and trips over physical obstacles or shoves through genuine multi-body contact dynamics.
+- **Fall Latch Toggle (`L` key):** In game mode, toggle `fall_latch_enabled` to let the official policy continuously fight disturbances and tilts without artificially dropping into `FAULT_DAMP`.
+- **Getup Recovery (`G` key):** Clears faults, preserves the robot's actual $(x, y)$ world coordinates (zero teleportation), and uses the official policy actuators and uprighting support to achieve foot contact and stable standing balance.
+
+### Locomotion & Posture
 ```text
 stand                   # Arm and ramp robot to settled standing pose
 walk 0.4                # Walk forward at 0.4 m/s (ranges: vx [-0.6, 0.8], vy [-0.5, 0.5], wz [-0.8, 0.8])
 walk 0.3 0.1 0.2        # Combined forward, lateral, and rotational velocity
 stop                    # Zero commanded velocity (robot balances in place)
+fall / safefall         # Controlled emergency collapse: compliance mode, Kp=0, Kd=2.0
+getup / recover         # Clear faults, restore base height at current (x, y), arm standing
+```
+
+### Gestures & Emotes
+Bring Asimov 1 to life with smooth procedural humanoid emotes:
+```text
+hello / wave            # Raise right arm and wave greeting (3.0s)
+bow                     # Respectful humanoid bow with tilted head (3.0s)
+squat / crouch          # Controlled deep knee/hip squat & smooth return (3.5s)
+cheer                   # Double-arm overhead victory celebration (3.0s)
+dance                   # Rhythmic waist sway and alternating arm groove (4.0s)
+nod                     # Head pitch affirmation nod (2.0s)
+shake                   # Head yaw negation shake (2.0s)
+emote                   # List all available emotes with descriptions and durations
+emote <name>            # Play any emote by name (e.g. emote hello)
 ```
 
 ### Keyboard Shortcuts
-You can also steer directly using single-character commands:
+You can also steer and gesture instantly using single-key shortcuts in both the CLI and Web Dashboard:
 - `w` / `s`: Forward / backward velocity ($0.05\,\text{m/s}$ steps)
 - `a` / `d`: Lateral velocity ($0.05\,\text{m/s}$ steps)
 - `q` / `e`: Yaw angular velocity ($0.10\,\text{rad/s}$ steps)
-- `space`: Stop / safe hold
+- `space`: Stop / zero-velocity hold
+- `1` - `4`: Physical disturbance pushes ($40\,\text{N}$, $80\,\text{N}$, $150\,\text{N}$, $250\,\text{N}$)
+- `o`: **Spawn Obstacle** (drop dynamic object in front of robot)
+- `f`: **Safe Fall** (compliant damping descent)
+- `g`: **Getup** (recover from ground, clear faults, arm stand)
+- `l`: **Toggle Fall Latch** (free-run policy through tilts)
+- `h`: **Hello / Wave** emote
+- `b`: **Bow** emote
+- `c`: **Crouch / Squat** emote
+- `k`: **Cheer** emote
+- `t`: **Dance** emote
 - `p`: Pause / resume simulation
 - `r`: Deterministic reset
+- `tab`: Context-aware command auto-completion
 
 ### Manual Joint Control Mode
 ```text
 mode manual             # Switch to direct joint control
-joints                  # Print table of all 25 joints
+joints                  # Print detailed 25-joint status table
 select 4                # Select joint (index 4 = left_knee_joint)
 set 0.60                # Set target in radians (clamped to joint range)
 add 0.05                # Increment target by +0.05 rad
@@ -202,7 +285,7 @@ io                      # Complete 78 Obs -> 23 Act pipeline visualization
 contacts                # Left & right foot contact booleans, touch sensors, and vertical forces (Fz)
 sensors                 # Simulated IMU (body-frame gyro, projected gravity, orientation quat, linear accel)
 joints                  # Comprehensive 25-joint status table with position limits and torque saturation
-torque                  # Actuator control signals, applied torques, and percentage effort limits
+torque                  # Actuator control signals, applied torques, effort %, and colored load status
 telemetry <minimal|normal|verbose|raw> # Configure verbosity
 telemetry rate <Hz>     # Set periodic background output rate
 ```

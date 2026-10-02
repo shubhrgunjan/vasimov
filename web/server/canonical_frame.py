@@ -399,6 +399,11 @@ class CanonicalFrameBuilder:
                     },
                     "gantry_active": bool(backend.gantry_active),
                     "paused": bool(backend.paused),
+                    "emote": {
+                        "active": bool(backend.emote_controller.is_active),
+                        "name": backend.emote_controller.current_emote_name,
+                        "progress": float(backend.emote_controller.progress),
+                    },
                 },
                 "base": {
                     "position": base_pos,

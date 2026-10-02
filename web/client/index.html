@@ -99,13 +99,32 @@
             <div class="control-section">
               <div class="control-section-title">Commands</div>
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
-                <button id="btnStand" class="btn btn-primary">STAND</button>
-                <button id="btnStop" class="btn btn-danger">STOP (HOLD)</button>
+                <button id="btnStand" class="btn btn-primary" title="Arm and ramp to standing pose">STAND</button>
+                <button id="btnStop" class="btn btn-danger" title="Zero velocity hold (Space)">STOP (HOLD)</button>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
+                <button id="btnSafeFall" class="btn" style="border-color: #f59e0b; color: #fbbf24;" title="Safe controlled collapse to DAMP (F)">SAFE FALL (F)</button>
+                <button id="btnGetup" class="btn" style="border-color: #10b981; color: #34d399;" title="Recover from ground and arm stand (G)">GETUP (G)</button>
               </div>
               <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px;">
-                <button id="btnReset" class="btn">RESET</button>
-                <button id="btnPause" class="btn">PAUSE</button>
+                <button id="btnReset" class="btn" title="Reset (R)">RESET</button>
+                <button id="btnPause" class="btn" title="Pause / Resume (P)">PAUSE</button>
                 <button id="btnStep" class="btn">STEP 1</button>
+              </div>
+            </div>
+
+            <!-- Emotes & Gestures -->
+            <div class="control-section">
+              <div class="control-section-title">Emotes &amp; Gestures</div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 4px;">
+                <button id="btnEmoteHello" class="btn btn-sm" title="Wave right hand (H)">HELLO (H)</button>
+                <button id="btnEmoteBow" class="btn btn-sm" title="Respectful bow (B)">BOW (B)</button>
+                <button id="btnEmoteSquat" class="btn btn-sm" title="Crouch / Squat (C)">SQUAT (C)</button>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
+                <button id="btnEmoteCheer" class="btn btn-sm" title="Victory cheer (K)">CHEER (K)</button>
+                <button id="btnEmoteDance" class="btn btn-sm" title="Dance groove (T)">DANCE (T)</button>
+                <button id="btnEmoteNod" class="btn btn-sm" title="Head nod">NOD</button>
               </div>
             </div>
 

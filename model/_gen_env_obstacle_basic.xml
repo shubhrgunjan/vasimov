@@ -228,9 +228,15 @@
       <camera name="direct_side_camera" mode="track" fovy="60.0" quat="0.707 0.707 0 0" pos="0 -3.0 0.7" />
       <camera name="direct_behind_camera" mode="track" fovy="60.0" quat="0.5 0.5 -0.5 -0.5" pos="-3.0 0 0.7" />
     </body>
-  <geom name="step_block_1" type="box" size="0.3 0.5 0.025" pos="1.5 0.0 0.025" rgba="0.8 0.3 0.2 1.0" contype="1" conaffinity="1"/>
-<geom name="step_block_2" type="box" size="0.3 0.5 0.035" pos="3.0 0.1 0.035" rgba="0.2 0.6 0.8 1.0" contype="1" conaffinity="1"/>
-</worldbody>
+      <body name="step_block_1" pos="1.2 0.0 0.05">
+      <freejoint name="step_block_1_joint" />
+      <geom name="step_block_1_geom" type="box" size="0.15 0.35 0.04" mass="4.0" friction="1.0 0.005 0.0001" rgba="0.8 0.3 0.2 1.0" contype="1" conaffinity="1" />
+    </body>
+    <body name="step_block_2" pos="2.5 0.1 0.12">
+      <freejoint name="step_block_2_joint" />
+      <geom name="step_block_2_geom" type="box" size="0.12 0.12 0.12" mass="3.0" friction="1.0 0.005 0.0001" rgba="0.2 0.6 0.8 1.0" contype="1" conaffinity="1" />
+    </body>
+  </worldbody>
   <contact>
     <exclude body1="pelvis_link" body2="right_hip_pitch_link" />
     <exclude body1="right_hip_pitch_link" body2="right_hip_roll_link" />
