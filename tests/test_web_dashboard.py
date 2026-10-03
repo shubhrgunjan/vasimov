@@ -186,13 +186,16 @@ class TestWebDashboard(unittest.TestCase):
         model_cams = [c for c in cams if c["type"] == "MODEL CAMERA"]
         viewer_cams = [c for c in cams if c["type"] == "VIEWER CAMERA"]
 
-        self.assertEqual(len(model_cams), 5)
+        self.assertEqual(len(model_cams), 8)
         self.assertEqual(len(viewer_cams), 1)
 
         cam_names = [c["name"] for c in model_cams]
+        self.assertIn("chase_camera", cam_names)
+        self.assertIn("first_person_camera", cam_names)
         self.assertIn("front_camera", cam_names)
         self.assertIn("side_camera", cam_names)
         self.assertIn("back_camera", cam_names)
+
 
         # Test snapshot HTTP endpoint
         url = f"http://127.0.0.1:{self.http_port}/api/camera/frame?camera=front_camera"

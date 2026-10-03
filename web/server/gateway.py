@@ -49,12 +49,14 @@ class WebGateway:
         telemetry_engine=None,
         http_port: int = 8852,
         ws_port: int = 8854,
+        host: str = "0.0.0.0",
     ):
         self.backend = backend
         self.core = core
         self.telemetry = telemetry_engine
         self.http_port = http_port
         self.ws_port = ws_port
+        self.host = host
 
         self.running: bool = False
         self._shutdown_event = threading.Event()
@@ -108,10 +110,12 @@ class WebGateway:
 
         log.info(
             "[GATEWAY] Started Virtual Asimov Web Gateway:\n"
-            "   Dashboard: http://127.0.0.1:%d\n"
-            "   WebSocket: ws://127.0.0.1:%d\n"
+            "   Dashboard: http://%s:%d\n"
+            "   WebSocket: ws://%s:%d\n"
             "   Cameras  : %s",
+            self.host,
             self.http_port,
+            self.host,
             self.ws_port,
             self.camera_streamer.all_cameras,
         )
@@ -222,7 +226,7 @@ class WebGateway:
                 self.ws_clients.discard(websocket)
 
         async def run_server():
-            async with websockets.serve(handler, "127.0.0.1", self.ws_port) as server:
+            async with websockets.serve(handler, self.host, self.ws_port) as server:
                 self._ws_server = server
                 while self.running:
                     await asyncio.sleep(0.1)
@@ -560,7 +564,7 @@ class WebGateway:
                 self.send_error(404, f"POST endpoint '{path}' not found")
 
         try:
-            self.http_server = http.server.HTTPServer(("127.0.0.1", self.http_port), GatewayRequestHandler)
+            self.http_server = http.server.HTTPServer((self.host, self.http_port), GatewayRequestHandler)
             self._http_thread = threading.Thread(
                 target=self.http_server.serve_forever,
                 daemon=True,

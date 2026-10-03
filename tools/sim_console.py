@@ -78,19 +78,26 @@ COMMANDS_LIST = [
     "reset", "pause", "resume", "step", "mode",
     "joints", "select", "set", "add", "sub", "zero",
     "state", "obs", "action", "io", "contacts", "sensors", "torque", "telemetry",
-    "env", "record", "replay", "export", "gantry", "push", "help", "quit", "exit",
+    "camera", "cam", "env", "record", "replay", "export", "gantry", "push", "help", "quit", "exit",
 ]
 
 SUBCOMMANDS = {
     "mode": ["policy", "manual", "hybrid"],
     "policy": ["list", "select", "info", "validate", "active"],
     "telemetry": ["on", "off", "minimal", "normal", "verbose", "raw", "rate"],
+    "camera": ["list", "chase", "fpv", "fpv_behind", "front", "side", "back", "free", "track"],
+    "cam": ["list", "chase", "fpv", "fpv_behind", "front", "side", "back", "free", "track"],
     "env": ["list", "load", "reset"],
-    "env load": ["flat", "obstacles", "playground", "physics_obstacles", "friction_low", "friction_high", "heavy_robot", "light_robot", "obstacle_basic", "terrain_basic"],
+    "env load": [
+        "flat", "obstacles", "playground", "physics_obstacles",
+        "friction_low", "friction_high", "heavy_robot", "light_robot",
+        "obstacle_basic", "terrain_basic", "corridor", "arena", "obstacle_course",
+    ],
     "record": ["start", "stop"],
     "gantry": ["on", "off"],
     "emote": ["hello", "wave", "bow", "squat", "crouch", "cheer", "dance", "nod", "shake"],
 }
+
 
 
 def setup_readline() -> None:
@@ -204,6 +211,7 @@ class SimConsole:
         telemetry_verbosity: str = "normal",
         telemetry_rate_hz: float = 2.0,
         enable_web: bool = False,
+        web_host: str = "0.0.0.0",
         web_port: int = 8852,
         ws_port: int = 8854,
         policy_name: Optional[str] = None,
@@ -211,13 +219,17 @@ class SimConsole:
         balance_policy: Optional[str] = None,
         recovery_policy: Optional[str] = None,
         debug_policy: bool = False,
+        camera: str = "chase",
     ):
         self.realtime = realtime
         self.use_viewer = use_viewer
         self.enable_web = enable_web
+        self.web_host = web_host
         self.web_port = web_port
         self.ws_port = ws_port
         self.debug_policy = debug_policy
+        self.camera_name = camera
+        self.active_camera = camera
         self.running = False
         self._shutdown_event = threading.Event()
 
@@ -271,6 +283,7 @@ class SimConsole:
                     telemetry_engine=self.telemetry,
                     http_port=self.web_port,
                     ws_port=self.ws_port,
+                    host=self.web_host,
                 )
                 self.gateway.start()
             except Exception as e:
@@ -290,6 +303,92 @@ class SimConsole:
         self.physics_thread: Optional[threading.Thread] = None
         self.telemetry_thread: Optional[threading.Thread] = None
 
+    CAMERA_ALIASES: Dict[str, str] = {
+        "chase": "chase_camera",
+        "chase_camera": "chase_camera",
+        "behind": "chase_camera",
+        "fpv_behind": "first_person_behind",
+        "first_person_behind": "first_person_behind",
+        "follow": "first_person_behind",
+        "fpv": "first_person_camera",
+        "first_person": "first_person_camera",
+        "eyes": "first_person_camera",
+        "head": "first_person_camera",
+        "front": "front_camera",
+        "front_camera": "front_camera",
+        "side": "side_camera",
+        "side_camera": "side_camera",
+        "back": "back_camera",
+        "back_camera": "back_camera",
+        "direct_side": "direct_side_camera",
+        "direct_behind": "direct_behind_camera",
+        "free": "free",
+        "track": "track",
+    }
+
+    def get_available_cameras(self) -> List[str]:
+        """Return list of camera names available in current MuJoCo model."""
+        cams = []
+        if hasattr(self.backend, "model") and self.backend.model is not None:
+            for i in range(self.backend.model.ncam):
+                name = mujoco.mj_id2name(self.backend.model, mujoco.mjtObj.mjOBJ_CAMERA, i)
+                if name:
+                    cams.append(name)
+        return cams
+
+    def set_camera(self, camera_name: str) -> Tuple[bool, str]:
+        """
+        Configure the 3D passive viewer camera view.
+        Supports:
+          - 'chase': 3rd person follow camera behind robot (turns and moves with pelvis)
+          - 'fpv_behind': close follow camera behind robot
+          - 'fpv': head eye-level first-person view
+          - 'front', 'side', 'back': tracking perspectives
+          - 'free': orbit free camera
+          - 'track': center-tracking robot floating base
+        """
+        raw = camera_name.strip().lower()
+        resolved = self.CAMERA_ALIASES.get(raw, raw)
+        self.active_camera = resolved
+
+        if self.viewer is None:
+            return True, f"Active camera set to '{resolved}' (will apply when viewer opens)"
+
+        try:
+            if resolved == "free":
+                self.viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+                msg = "Viewer camera switched to FREE orbit camera"
+            elif resolved == "track":
+                self.viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+                self.viewer.cam.trackbodyid = self.backend.pelvis_body_id
+                msg = "Viewer camera switched to TRACKING robot base"
+            else:
+                cam_id = mujoco.mj_name2id(self.backend.model, mujoco.mjtObj.mjOBJ_CAMERA, resolved)
+                if cam_id != -1:
+                    self.viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
+                    self.viewer.cam.fixedcamid = cam_id
+                    msg = f"Viewer camera switched to '{resolved}'"
+                else:
+                    return False, f"Camera '{resolved}' not found in MuJoCo model. Available: {self.get_available_cameras()} + ['free', 'track']"
+
+            if hasattr(self.viewer, "sync"):
+                self.viewer.sync()
+            return True, msg
+        except Exception as e:
+            return False, f"Failed to set camera: {e}"
+
+    def cycle_camera(self) -> str:
+        """Cycle through primary camera views (Chase ➔ FPV Behind ➔ FPV Head ➔ Free Orbit)."""
+        cycle_order = ["chase_camera", "first_person_behind", "first_person_camera", "free"]
+        cur = self.CAMERA_ALIASES.get(self.active_camera, self.active_camera)
+        try:
+            idx = cycle_order.index(cur)
+            next_cam = cycle_order[(idx + 1) % len(cycle_order)]
+        except ValueError:
+            next_cam = cycle_order[0]
+        self.set_camera(next_cam)
+        return next_cam
+
     def start_viewer(self) -> bool:
         """Launch MuJoCo passive viewer if requested and display is available."""
         if not self.use_viewer:
@@ -303,11 +402,13 @@ class SimConsole:
             import mujoco.viewer
             self.viewer = mujoco.viewer.launch_passive(self.backend.model, self.backend.data)
             log.info("[VIEWER] MuJoCo interactive passive viewer launched successfully.")
+            self.set_camera(self.active_camera)
             return True
         except Exception as e:
             log.warning("[VIEWER] Could not launch viewer (%s); continuing in headless mode.", e)
             self.viewer = None
             return False
+
 
     def _physics_loop(self) -> None:
         """Background 200 Hz physics simulation loop."""
@@ -413,6 +514,8 @@ class SimConsole:
   {C_CYAN}Active Policy{C_RESET}    : {pol_name_str} ({pol_spec_str} @ {pol_freq_str})
   {C_CYAN}Policy Category{C_RESET}  : {active_pol.category.upper() if active_pol else 'NONE'}
   {C_CYAN}Live 3D Viewer{C_RESET}   : {viewer_status}
+  {C_CYAN}Camera View{C_RESET}      : {self.active_camera} (Chase / FPV / Free)
+  {C_CYAN}Environment{C_RESET}      : {self.backend.env_manager.current_preset}
   {C_CYAN}Telemetry Engine{C_RESET} : {self.telemetry.rate_hz:.1f} Hz ({self.telemetry.verbosity.upper()})
   {C_CYAN}Active Mode{C_RESET}      : {C_BOLD}{self.backend.control_mode.upper()}{C_RESET}{web_info}
 
@@ -459,11 +562,12 @@ class SimConsole:
     {C_BOLD}zero{C_RESET}                    Reset selected joint to default standing angle
 
   {C_WHITE}🌍 Sim & World Controls{C_RESET}
+    {C_BOLD}camera <name|list|cycle>{C_RESET} Switch 3D follow / FPV camera view (chase, fpv, free)
+    {C_BOLD}env <list|load <p>|reset>{C_RESET} Switch environment presets & custom files (YAML/XML)
     {C_BOLD}reset [seed]{C_RESET}            Deterministic reset to initial settled stance
     {C_BOLD}pause / resume / step{C_RESET}   Freeze physics or step n control cycles
     {C_BOLD}gantry <on|off>{C_RESET}         Toggle virtual gantry weld
     {C_BOLD}push <force> [dir] [s]{C_RESET}  Inject pelvis disturbance force
-    {C_BOLD}env <list|load <p>|reset>{C_RESET} Switch environment presets & friction
     {C_BOLD}record / replay / export{C_RESET} Flight data recording & replay
 
 {C_CYAN}├── KEYBOARD SHORTCUTS ────────────────────────────────────────────────────────┤{C_RESET}
@@ -471,7 +575,7 @@ class SimConsole:
   {C_BOLD}SPACE{C_RESET} : stop (zero vel)   {C_BOLD}F{C_RESET}     : safe fall           {C_BOLD}G{C_RESET}     : getup recovery
   {C_BOLD}1 - 4{C_RESET} : pushes 40-250N    {C_BOLD}O{C_RESET}     : spawn obstacle      {C_BOLD}L{C_RESET}     : toggle fall latch
   {C_BOLD}H / B{C_RESET} : wave / bow        {C_BOLD}C / K{C_RESET} : crouch / cheer      {C_BOLD}T{C_RESET}     : dance groove
-  {C_BOLD}P / R{C_RESET} : pause / reset     {C_BOLD}TAB{C_RESET}   : auto-complete       {C_BOLD}help{C_RESET}  : print this menu
+  {C_BOLD}V{C_RESET}     : cycle camera view {C_BOLD}P / R{C_RESET} : pause / reset     {C_BOLD}TAB{C_RESET}   : auto-complete
 {C_CYAN}└──────────────────────────────────────────────────────────────────────────────┘{C_RESET}
 """
         print(banner)
@@ -510,7 +614,7 @@ class SimConsole:
         args = parts[1:]
 
         # Handle Keyboard Shortcuts as commands
-        if cmd in ("w", "s", "a", "d", "q", "e", "space", "p", "r", "f", "g", "h", "b", "c", "k", "t"):
+        if cmd in ("w", "s", "a", "d", "q", "e", "space", "p", "r", "f", "g", "h", "b", "c", "k", "t", "v"):
             self._handle_keyboard_shortcut(cmd)
             return
 
@@ -915,27 +1019,77 @@ class SimConsole:
                 else:
                     print("Usage: telemetry rate <Hz>")
 
+        elif cmd in ("camera", "cam"):
+            if not args or args[0] in ("list", "info"):
+                cams = self.get_available_cameras() + ["free", "track"]
+                active = self.active_camera
+                print(f"\n{C_CYAN}AVAILABLE 3D VIEWER CAMERAS:{C_RESET}")
+                for c in cams:
+                    is_active = (c == active or self.CAMERA_ALIASES.get(active) == c)
+                    mark = f"{C_GREEN} ●{C_RESET}" if is_active else "  "
+                    tag = ""
+                    if c in ("chase_camera", "chase"):
+                        tag = f" {C_YELLOW}(3rd person follow behind robot, moves & rotates with robot){C_RESET}"
+                    elif c in ("first_person_behind", "fpv_behind"):
+                        tag = f" {C_YELLOW}(Close over-the-shoulder follow behind robot){C_RESET}"
+                    elif c in ("first_person_camera", "fpv"):
+                        tag = f" {C_YELLOW}(Head eye-level FPV looking forward){C_RESET}"
+                    elif c == "free":
+                        tag = " (Interactive orbit view)"
+                    elif c == "track":
+                        tag = " (Center tracking robot floating base)"
+                    print(f"{mark} {C_BOLD}{c:<22}{C_RESET}{tag}")
+                print(f"\nActive Camera: {C_CYAN}{active}{C_RESET}")
+                print("Switch camera: 'camera <name>' (e.g. 'camera chase', 'camera fpv', 'camera free')")
+                print("Cycle camera : 'camera cycle' (or press 'V' in live game mode)")
+            elif args[0] in ("cycle", "next"):
+                new_cam = self.cycle_camera()
+                print(f"{C_GREEN}[CAMERA]{C_RESET} Cycled view to '{new_cam}'")
+            else:
+                target = args[0]
+                ok, msg = self.set_camera(target)
+                if ok:
+                    print(f"{C_GREEN}[CAMERA]{C_RESET} {msg}")
+                else:
+                    print(f"{C_RED}[CAMERA ERROR]{C_RESET} {msg}")
+
         elif cmd == "env":
             if not args or args[0] == "list":
                 presets = self.backend.env_manager.list_presets()
-                print("AVAILABLE ENVIRONMENT PRESETS:")
+                print(f"\n{C_CYAN}AVAILABLE ENVIRONMENT PRESETS & CUSTOM FILES:{C_RESET}")
                 for p_name, p_desc in presets.items():
-                    mark = " *" if p_name == self.backend.env_manager.current_preset else "  "
-                    print(f"{mark} {p_name:<16} : {p_desc}")
+                    mark = f"{C_GREEN} ●{C_RESET}" if p_name == self.backend.env_manager.current_preset else "  "
+                    print(f"{mark} {C_BOLD}{p_name:<18}{C_RESET} : {p_desc}")
+                print("\nLoad any preset or custom file with: 'env load <name_or_path>'")
             elif args[0] == "load":
                 if len(args) > 1:
-                    preset_name = args[1].lower()
+                    preset_arg = " ".join(args[1:]).strip()
                     try:
-                        res = self.backend.load_environment(preset_name)
-                        print(f"Successfully loaded environment '{preset_name}':")
+                        res = self.backend.load_environment(preset_arg)
+                        if self.viewer is not None and self.use_viewer:
+                            try:
+                                self.viewer.close()
+                            except Exception:
+                                pass
+                            self.viewer = None
+                            self.start_viewer()
+                        print(f"Successfully loaded environment '{preset_arg}':")
                         print(f"  Friction: mu={res['ground_friction']}, Mass scale: {res['mass_scale']}, Obstacles: {res['obstacle_count']}")
                     except Exception as e:
                         print(f"ERROR: {e}")
                 else:
-                    print("Usage: env load <preset_name>")
+                    print("Usage: env load <preset_or_file_path>")
             elif args[0] == "reset":
                 self.backend.load_environment(self.backend.env_manager.current_preset)
-                print(f"Reset environment to nominal preset: {self.backend.env_manager.current_preset}")
+                if self.viewer is not None and self.use_viewer:
+                    try:
+                        self.viewer.close()
+                    except Exception:
+                        pass
+                    self.viewer = None
+                    self.start_viewer()
+                print(f"Reset environment to nominal: {self.backend.env_manager.current_preset}")
+
 
         elif cmd == "record":
             if not args:
@@ -1168,6 +1322,10 @@ class SimConsole:
             self.core.fall_latch_enabled = not self.core.fall_latch_enabled
             state_str = "ENABLED" if self.core.fall_latch_enabled else "DISABLED (Policy free-run)"
             print(f"\n{C_CYAN}INPUT: KEY=L (TOGGLE FALL LATCH) | Fall latch: {state_str}{C_RESET}")
+        elif key == "v":
+            new_cam = self.cycle_camera()
+            print(f"\n{C_CYAN}INPUT: KEY=V (CYCLE CAMERA) | Active: {new_cam}{C_RESET}")
+
 
     def enter_drive_mode(self) -> None:
         """
@@ -1262,6 +1420,9 @@ class SimConsole:
                             cur_pos = [float(self.backend.data.qpos[adr]) for adr in self.backend.actuator_qposadr]
                             self.core.command_stand("sdk", current_sim_pos=cur_pos, current_time=sim_t)
                             last_action_msg = "STAND commanded: official policy stance armed."
+                        elif key == "v":
+                            new_cam = self.cycle_camera()
+                            last_action_msg = f"Camera view cycled -> {new_cam}"
                         elif key == "p":
                             self.backend.set_paused(not self.backend.paused)
                             status = "PAUSED" if self.backend.paused else "RESUMED"
@@ -1302,7 +1463,7 @@ class SimConsole:
                         f"{C_CYAN}╔════════════════════════════════════════════════════════════════════════════════════════════════╗{C_RESET}\n"
                         f"{C_CYAN}║{C_RESET} {C_BOLD}{C_WHITE}🕹️  VIRTUAL ASIMOV 1 — REAL-TIME GAME TELEOPERATION (OFFICIAL POLICY){C_RESET}           {C_CYAN}║{C_RESET}\n"
                         f"{C_CYAN}╠════════════════════════════════════════════════════════════════════════════════════════════════╣{C_RESET}\n"
-                        f"{C_CYAN}║{C_RESET} {C_BOLD}SIM STATUS{C_RESET} : {sim_status} | Time: {sim_t:7.2f}s | Mode: {C_YELLOW}{mode_str:<12}{C_RESET} | Gantry: {gantry_badge} | Fall Latch: {latch_badge}\n"
+                        f"{C_CYAN}║{C_RESET} {C_BOLD}SIM STATUS{C_RESET} : {sim_status} | Time: {sim_t:7.2f}s | Mode: {C_YELLOW}{mode_str:<12}{C_RESET} | Cam: {C_CYAN}{self.active_camera:<14}{C_RESET} | Latch: {latch_badge}\n"
                         f"{C_CYAN}║{C_RESET} {C_BOLD}COMMANDS{C_RESET}   : Vx: {C_BOLD}{self.core.current_vx:+.2f}{C_RESET} m/s | Vy: {C_BOLD}{self.core.current_vy:+.2f}{C_RESET} m/s | Vyaw: {C_BOLD}{self.core.current_vyaw:+.2f}{C_RESET} rad/s\n"
                         f"{C_CYAN}║{C_RESET} {C_BOLD}ODOMETRY{C_RESET}   : X: {pos_x:+6.2f}m | Y: {pos_y:+6.2f}m | Z: {pos_z:6.3f}m | Speed: {speed:4.2f} m/s\n"
                         f"{C_CYAN}║{C_RESET} {C_BOLD}ATTITUDE{C_RESET}   : Roll: {b_state.get('roll_deg', 0.0):+5.1f}° | Pitch: {b_state.get('pitch_deg', 0.0):+5.1f}° | Yaw: {b_state.get('yaw_deg', 0.0):+5.1f}° | Tilt: {tilt_deg:4.1f}°\n"
@@ -1317,7 +1478,9 @@ class SimConsole:
                         f"{C_CYAN}║{C_RESET}   {C_BOLD}[F]{C_RESET}       : Controlled Safe Fall (Compliant ground descent)\n"
                         f"{C_CYAN}║{C_RESET}   {C_BOLD}[G]{C_RESET}       : Real Policy Getup Recovery (Preserves position & balances)\n"
                         f"{C_CYAN}║{C_RESET}   {C_BOLD}[L]{C_RESET}       : Toggle Fall Latch (Allow policy to run through falls)\n"
+                        f"{C_CYAN}║{C_RESET}   {C_BOLD}[V]{C_RESET}       : Cycle Camera (Chase ➔ FPV Behind ➔ FPV Head ➔ Free Orbit)\n"
                         f"{C_CYAN}║{C_RESET}   {C_BOLD}[P]{C_RESET}       : Pause / Resume Simulation      {C_BOLD}[ESC / M]{C_RESET} : Exit to Main Console\n"
+
                         f"{C_CYAN}╠════════════════════════════════════════════════════════════════════════════════════════════════╣{C_RESET}\n"
                         f"{C_CYAN}║{C_RESET} {C_MAGENTA}FEEDBACK{C_RESET}   : {last_action_msg:<86}\n"
                         f"{C_CYAN}╚════════════════════════════════════════════════════════════════════════════════════════════════╝{C_RESET}\n"
@@ -1437,6 +1600,7 @@ def main() -> int:
     parser.add_argument("--telemetry-rate", type=float, default=2.0, help="Periodic telemetry rate in Hz")
     parser.add_argument("--script", type=str, default=None, help="Path to batch command script file")
     parser.add_argument("--web", action="store_true", help="Launch live web dashboard gateway alongside interactive console")
+    parser.add_argument("--web-host", type=str, default="0.0.0.0", help="HTTP & WS host to bind gateway (default: 0.0.0.0)")
     parser.add_argument("--web-port", type=int, default=8852, help="HTTP web port for dashboard (default: 8852)")
     parser.add_argument("--ws-port", type=int, default=8854, help="WebSocket telemetry port (default: 8854)")
     parser.add_argument("--drive", "--game", "--teleop", dest="drive_mode", action="store_true", help="Launch directly into live keyboard game teleoperation mode (WASD keys)")
@@ -1449,6 +1613,12 @@ def main() -> int:
     parser.add_argument("--locomotion", type=str, default=None, help="Specify locomotion policy for multi-policy composition")
     parser.add_argument("--balance", type=str, default=None, help="Specify balance policy for multi-policy composition")
     parser.add_argument("--recovery", type=str, default=None, help="Specify recovery policy for multi-policy composition")
+    parser.add_argument(
+        "--camera",
+        type=str,
+        default="chase",
+        help="Initial 3D viewer camera view: 'chase' (behind robot, follows & turns), 'fpv_behind', 'fpv' (head eye-level), 'front', 'side', 'free', etc. (default: chase)",
+    )
     args = parser.parse_args()
 
     # If --list-policies requested, discover and print catalog, then exit
@@ -1486,6 +1656,7 @@ def main() -> int:
         telemetry_verbosity=args.telemetry_verbosity,
         telemetry_rate_hz=args.telemetry_rate,
         enable_web=args.web,
+        web_host=args.web_host,
         web_port=args.web_port,
         ws_port=args.ws_port,
         policy_name=args.policy,
@@ -1493,9 +1664,11 @@ def main() -> int:
         balance_policy=args.balance,
         recovery_policy=args.recovery,
         debug_policy=args.debug_policy,
+        camera=args.camera,
     )
     console.run(script_path=args.script, start_in_drive_mode=args.drive_mode)
     return 0
+
 
 
 if __name__ == "__main__":

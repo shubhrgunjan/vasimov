@@ -1,0 +1,55 @@
+# Virtual Asimov 1 - Narrow Corridor Environment
+# A straight walking corridor bounded by safety railings with small dynamic obstacles.
+
+name: corridor
+description: "Narrow walking corridor flanked by railings with small stumbling blocks"
+
+# Ground and physics properties
+ground_friction: 1.2
+mass_scale: 1.0
+gravity: [0.0, 0.0, -9.81]
+
+# Obstacles placed along the corridor
+obstacles:
+  # Left safety railing (static)
+  - name: "left_railing"
+    type: "box"
+    pos: [2.0, -0.65, 0.4]
+    size: [2.5, 0.04, 0.35]
+    dynamic: false
+    rgba: [0.35, 0.55, 0.85, 0.8]
+
+  # Right safety railing (static)
+  - name: "right_railing"
+    type: "box"
+    pos: [2.0, 0.65, 0.4]
+    size: [2.5, 0.04, 0.35]
+    dynamic: false
+    rgba: [0.35, 0.55, 0.85, 0.8]
+
+  # Dynamic low step bar across path
+  - name: "corridor_step_bar"
+    type: "box"
+    pos: [1.2, 0.0, 0.04]
+    size: [0.12, 0.35, 0.035]
+    mass: 3.5
+    dynamic: true
+    rgba: [0.85, 0.30, 0.20, 1.0]
+
+  # Dynamic rolling ball
+  - name: "corridor_ball"
+    type: "sphere"
+    pos: [2.4, 0.15, 0.12]
+    size: [0.10]
+    mass: 1.5
+    dynamic: true
+    rgba: [0.20, 0.75, 0.45, 1.0]
+
+  # Dynamic pushable crate
+  - name: "corridor_crate"
+    type: "box"
+    pos: [3.2, -0.10, 0.14]
+    size: [0.12, 0.12, 0.12]
+    mass: 4.0
+    dynamic: true
+    rgba: [0.95, 0.65, 0.15, 1.0]

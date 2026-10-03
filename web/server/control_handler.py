@@ -92,6 +92,20 @@ class ControlHandler:
                 ack["status"] = "rejected"
                 ack["lifecycle"]["validation"] = "REJECTED: command_stand failed"
 
+        # ── 1b. DAMP ─────────────────────────────────────────────────────────
+        elif action == "damp":
+            ack["lifecycle"]["parsed"] = {"action": "DAMP"}
+            sim_t = float(self.backend.data.time)
+            ok = self.core.command_damp("sdk", current_time=sim_t)
+            if ok:
+                ack["status"] = "accepted"
+                ack["lifecycle"]["applied"] = "EdgeCore.command_damp -> DAMP mode"
+                ack["lifecycle"]["simulator_result"] = f"mode = DAMP, base_z = {self.backend.data.qpos[2]:.4f}m"
+                self.record_event(f"Command DAMP: compliant damping engaged (sim_t={sim_t:.2f}s)")
+            else:
+                ack["status"] = "rejected"
+                ack["lifecycle"]["validation"] = "REJECTED: command_damp failed"
+
         # ── 2. WALK ──────────────────────────────────────────────────────────
         elif action == "walk":
             try:

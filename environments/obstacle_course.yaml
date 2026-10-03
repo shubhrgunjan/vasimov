@@ -1,0 +1,50 @@
+# Virtual Asimov 1 - Obstacle Course
+# A multi-obstacle agility testing field with dynamic rolling spheres and stumbling blocks.
+
+name: obstacle_course
+description: "Agility obstacle course with dynamic rolling balls, stumbling bars, and stepping markers"
+
+ground_friction: 1.0
+mass_scale: 1.0
+gravity: [0.0, 0.0, -9.81]
+
+obstacles:
+  - name: "course_stumble_1"
+    type: "box"
+    pos: [0.70, 0.0, 0.035]
+    size: [0.12, 0.32, 0.035]
+    mass: 4.2
+    dynamic: true
+    rgba: [0.85, 0.25, 0.25, 1.0]
+
+  - name: "course_ball_1"
+    type: "sphere"
+    pos: [1.25, -0.18, 0.12]
+    size: [0.11]
+    mass: 1.6
+    dynamic: true
+    rgba: [0.20, 0.70, 0.95, 1.0]
+
+  - name: "course_ball_2"
+    type: "sphere"
+    pos: [1.80, 0.20, 0.14]
+    size: [0.13]
+    mass: 2.2
+    dynamic: true
+    rgba: [0.90, 0.45, 0.15, 1.0]
+
+  - name: "course_cylinder_1"
+    type: "cylinder"
+    pos: [2.50, -0.12, 0.18]
+    size: [0.08, 0.18]
+    mass: 2.5
+    dynamic: true
+    rgba: [0.80, 0.80, 0.20, 1.0]
+
+  - name: "course_box_target"
+    type: "box"
+    pos: [3.20, 0.0, 0.15]
+    size: [0.15, 0.15, 0.15]
+    mass: 5.0
+    dynamic: true
+    rgba: [0.30, 0.85, 0.45, 1.0]

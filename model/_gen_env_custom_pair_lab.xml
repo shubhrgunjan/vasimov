@@ -62,10 +62,27 @@
     <mesh name="left_shoulder_yaw_link.STL" file="LEFT_SHOULDER_YAW.STL" />
     <mesh name="left_elbow_link.STL" file="LEFT_ELBOW.STL" />
     <mesh name="left_wrist_yaw_link.STL" file="LEFT_WRIST_YAW.STL" />
+  <texture name="grid_floor" type="2d" builtin="checker" width="512" height="512" rgb1="0.22 0.23 0.26" rgb2="0.28 0.29 0.32" />
+    
+<material name="floor_mat" texture="grid_floor" texrepeat="18 15" reflectance="0.08" />
+
+    
+<material name="chair_mat" rgba="0.24 0.26 0.30 1" specular="0.18" roughness="0.75" />
+    
+<material name="table_small_mat" rgba="0.82 0.76 0.68 1" specular="0.25" roughness="0.65" />
+    
+<material name="table_big_mat" rgba="0.78 0.72 0.65 1" specular="0.2" roughness="0.6" />
+    
+<material name="wall_mat" rgba="0.90 0.90 0.88 1" specular="0.1" roughness="0.9" />
+    
+<material name="partition_mat" rgba="0.82 0.84 0.86 1" specular="0.1" roughness="0.85" />
+    
+<material name="pillar_mat" rgba="0.72 0.74 0.76 1" specular="0.2" roughness="0.7" />
+  
   </asset>
   <worldbody>
     <light pos="1 0 3.5" dir="0 0 -1" directional="true" />
-    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" friction="1.2 0.5 0.1" condim="3" />
+    <!-- overridden base floor -->
     <light directional="true" diffuse=".4 .4 .4" specular="0.1 0.1 0.1" pos="0 0 5.0" dir="0 0 -1" castshadow="false" />
     <light directional="true" diffuse=".6 .6 .6" specular="0.2 0.2 0.2" pos="0 0 4" dir="0 0 -1" />
     <body name="pelvis_link" pos="0 0.00000000 0.630" quat="1 0 0 0">
@@ -231,6 +248,141 @@
       <camera name="direct_side_camera" mode="track" fovy="60.0" quat="0.707 0.707 0 0" pos="0 -3.0 0.7" />
       <camera name="direct_behind_camera" mode="track" fovy="60.0" quat="0.5 0.5 -0.5 -0.5" pos="-3.0 0 0.7" />
     </body>
+  <light name="sun_key" pos="0 0 8" dir="0.2 0.3 -1" directional="true" diffuse="0.7 0.7 0.65" specular="0.3 0.3 0.3" castshadow="true" />
+    
+<light name="fill_left" pos="-5 0 4.5" dir="0.5 0 -1" directional="false" diffuse="0.45 0.45 0.5" castshadow="false" />
+    
+<light name="fill_right" pos="5 0 4.5" dir="-0.5 0 -1" directional="false" diffuse="0.45 0.45 0.5" castshadow="false" />
+
+    
+    
+<geom name="floor" type="plane" size="9.05 7.71 0.1" material="floor_mat" />
+
+    
+    
+<geom name="wall_north" type="box" pos="0 7.71 2.67" size="9.05 0.08 2.67" material="wall_mat" />
+    
+<geom name="wall_south" type="box" pos="0 -7.71 2.67" size="9.05 0.08 2.67" material="wall_mat" />
+    
+<geom name="wall_east" type="box" pos="9.05 0 2.67" size="0.08 7.71 2.67" material="wall_mat" />
+    
+<geom name="wall_west" type="box" pos="-9.05 0 2.67" size="0.08 7.71 2.67" material="wall_mat" />
+
+    
+    
+<geom name="side_room" type="box" pos="5.95 6.41 2.67" size="3.10 1.30 2.67" material="partition_mat" />
+
+    
+    
+<geom name="pillar_1" type="box" pos="8.94 -1.9101 2.67" size="0.11 0.50 2.67" material="pillar_mat" />
+
+    
+    
+<geom name="table_big" type="box" pos="5.95 3.94 0.8" size="3.10 1.10 0.8" material="table_big_mat" />
+
+    
+    
+<body name="table_small_1" pos="-5.2468 3.5000 0" euler="0 0 90">
+      <geom name="table_small_1_top" type="box" pos="0 0 0.725" size="0.60 0.45 0.025" material="table_small_mat" />
+      <geom name="table_small_1_leg1" type="cylinder" pos="0.52 0.37 0.35" size="0.025 0.35" material="table_small_mat" />
+      <geom name="table_small_1_leg2" type="cylinder" pos="-0.52 0.37 0.35" size="0.025 0.35" material="table_small_mat" />
+      <geom name="table_small_1_leg3" type="cylinder" pos="0.52 -0.37 0.35" size="0.025 0.35" material="table_small_mat" />
+      <geom name="table_small_1_leg4" type="cylinder" pos="-0.52 -0.37 0.35" size="0.025 0.35" material="table_small_mat" />
+    </body>
+
+    
+<body name="table_small_2" pos="-5.2468 -4.3101 0" euler="0 0 90">
+      <geom name="table_small_2_top" type="box" pos="0 0 0.725" size="0.60 0.45 0.025" material="table_small_mat" />
+      <geom name="table_small_2_leg1" type="cylinder" pos="0.52 0.37 0.35" size="0.025 0.35" material="table_small_mat" />
+      <geom name="table_small_2_leg2" type="cylinder" pos="-0.52 0.37 0.35" size="0.025 0.35" material="table_small_mat" />
+      <geom name="table_small_2_leg3" type="cylinder" pos="0.52 -0.37 0.35" size="0.025 0.35" material="table_small_mat" />
+      <geom name="table_small_2_leg4" type="cylinder" pos="-0.52 -0.37 0.35" size="0.025 0.35" material="table_small_mat" />
+    </body>
+
+    
+    
+    
+<body name="chair_1" pos="-6.4458 5.1836 0" euler="0 0 270">
+      <geom name="chair_1_seat" type="box" pos="0 0 0.45" size="0.22 0.22 0.025" material="chair_mat" />
+      <geom name="chair_1_back" type="box" pos="-0.19 0 0.65" size="0.025 0.20 0.20" material="chair_mat" />
+      <geom name="chair_1_leg" type="cylinder" pos="0 0 0.21" size="0.035 0.21" material="chair_mat" />
+    </body>
+
+    
+<body name="chair_2" pos="-4.0647 5.1836 0" euler="0 0 270">
+      <geom name="chair_2_seat" type="box" pos="0 0 0.45" size="0.22 0.22 0.025" material="chair_mat" />
+      <geom name="chair_2_back" type="box" pos="-0.19 0 0.65" size="0.025 0.20 0.20" material="chair_mat" />
+      <geom name="chair_2_leg" type="cylinder" pos="0 0 0.21" size="0.035 0.21" material="chair_mat" />
+    </body>
+
+    
+<body name="chair_3" pos="-4.2503 1.7642 0" euler="0 0 90">
+      <geom name="chair_3_seat" type="box" pos="0 0 0.45" size="0.22 0.22 0.025" material="chair_mat" />
+      <geom name="chair_3_back" type="box" pos="-0.19 0 0.65" size="0.025 0.20 0.20" material="chair_mat" />
+      <geom name="chair_3_leg" type="cylinder" pos="0 0 0.21" size="0.035 0.21" material="chair_mat" />
+    </body>
+
+    
+<body name="chair_4" pos="-6.6313 1.7642 0" euler="0 0 90">
+      <geom name="chair_4_seat" type="box" pos="0 0 0.45" size="0.22 0.22 0.025" material="chair_mat" />
+      <geom name="chair_4_back" type="box" pos="-0.19 0 0.65" size="0.025 0.20 0.20" material="chair_mat" />
+      <geom name="chair_4_leg" type="cylinder" pos="0 0 0.21" size="0.035 0.21" material="chair_mat" />
+    </body>
+
+    
+    
+<body name="chair_5" pos="-6.6313 -2.6867 0" euler="0 0 270">
+      <geom name="chair_5_seat" type="box" pos="0 0 0.45" size="0.22 0.22 0.025" material="chair_mat" />
+      <geom name="chair_5_back" type="box" pos="-0.19 0 0.65" size="0.025 0.20 0.20" material="chair_mat" />
+      <geom name="chair_5_leg" type="cylinder" pos="0 0 0.21" size="0.035 0.21" material="chair_mat" />
+    </body>
+
+    
+<body name="chair_6" pos="-4.2503 -2.6867 0" euler="0 0 270">
+      <geom name="chair_6_seat" type="box" pos="0 0 0.45" size="0.22 0.22 0.025" material="chair_mat" />
+      <geom name="chair_6_back" type="box" pos="-0.19 0 0.65" size="0.025 0.20 0.20" material="chair_mat" />
+      <geom name="chair_6_leg" type="cylinder" pos="0 0 0.21" size="0.035 0.21" material="chair_mat" />
+    </body>
+
+    
+<body name="chair_7" pos="-6.6313 -6.1060 0" euler="0 0 90">
+      <geom name="chair_7_seat" type="box" pos="0 0 0.45" size="0.22 0.22 0.025" material="chair_mat" />
+      <geom name="chair_7_back" type="box" pos="-0.19 0 0.65" size="0.025 0.20 0.20" material="chair_mat" />
+      <geom name="chair_7_leg" type="cylinder" pos="0 0 0.21" size="0.035 0.21" material="chair_mat" />
+    </body>
+
+    
+<body name="chair_8" pos="-4.2503 -6.1060 0" euler="0 0 90">
+      <geom name="chair_8_seat" type="box" pos="0 0 0.45" size="0.22 0.22 0.025" material="chair_mat" />
+      <geom name="chair_8_back" type="box" pos="-0.19 0 0.65" size="0.025 0.20 0.20" material="chair_mat" />
+      <geom name="chair_8_leg" type="cylinder" pos="0 0 0.21" size="0.035 0.21" material="chair_mat" />
+    </body>
+
+    
+    
+<body name="chair_9" pos="4.5862 1.9791 0" euler="0 0 90">
+      <geom name="chair_9_seat" type="box" pos="0 0 0.45" size="0.22 0.22 0.025" material="chair_mat" />
+      <geom name="chair_9_back" type="box" pos="-0.19 0 0.65" size="0.025 0.20 0.20" material="chair_mat" />
+      <geom name="chair_9_leg" type="cylinder" pos="0 0 0.21" size="0.035 0.21" material="chair_mat" />
+    </body>
+
+    
+<body name="chair_10" pos="6.9673 1.9791 0" euler="0 0 90">
+      <geom name="chair_10_seat" type="box" pos="0 0 0.45" size="0.22 0.22 0.025" material="chair_mat" />
+      <geom name="chair_10_back" type="box" pos="-0.19 0 0.65" size="0.025 0.20 0.20" material="chair_mat" />
+      <geom name="chair_10_leg" type="cylinder" pos="0 0 0.21" size="0.035 0.21" material="chair_mat" />
+    </body>
+
+    
+    
+<camera name="lab_overview" pos="0 -6.5 4.5" euler="55 0 0" />
+    
+<camera name="workspace_north" pos="-5.25 -0.5 3.5" euler="50 0 0" />
+    
+<camera name="workspace_south" pos="-5.25 -8.0 3.5" euler="50 0 0" />
+    
+<camera name="conference_area" pos="5.95 -0.5 3.2" euler="50 0 0" />
+  
   </worldbody>
   <contact>
     <exclude body1="pelvis_link" body2="right_hip_pitch_link" />

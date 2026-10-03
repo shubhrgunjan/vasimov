@@ -194,13 +194,52 @@ The terminal transforms into a **silky-smooth 25 Hz live ANSI HUD** displaying r
 ╚════════════════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
-### Real Dynamic Physics Obstacles & Environments
-Test stumbling, collision, and balance recovery with actual 6-DoF rigid bodies (with real mass, inertia, friction, and contact dynamics):
-```text
-env load obstacles      # Movable 3kg boxes, 1.5kg rolling ball, 2.5kg cylinder, 4.5kg trip bar
-env load playground     # Multi-shape interactive arena with diverse collision objects
-spawn [dist]            # Drop a dynamic obstacle at distance (e.g. spawn 0.8) ahead of current heading
+### Real Dynamic Physics Obstacles & Custom Environments
+VASIMOV features a simple drop-in custom environment system. Drop any `.yaml` or `.xml` file into the `environments/` directory or load it from any path on disk:
+
+```bash
+# Launch with built-in presets
+./run_sim.sh --env obstacles
+./run_sim.sh --env playground
+
+# Launch with custom environments (YAML or XML)
+./run_sim.sh --env corridor
+./run_sim.sh --env arena
+./run_sim.sh --env environments/obstacle_course.yaml
+./run_sim.sh --env /path/to/my_world.xml
 ```
+
+Inside the interactive console:
+```text
+env list                    # List all built-in presets and discovered custom files
+env load corridor           # Load corridor.yaml
+env load arena              # Load arena.xml
+env load path/to/my_env.xml # Load from arbitrary file path
+spawn [dist]                # Drop a dynamic obstacle at distance (e.g. spawn 0.8) ahead of heading
+```
+
+### First-Person & Chase Follow Cameras
+Experience the simulation from behind the robot or directly through its eyes:
+- **`chase`** (`chase_camera`): Third-person follow camera positioned 1.5m behind the robot floating base. **Rigidly moves, translates, and rotates with the robot's heading** as it walks, turns, and tilts.
+- **`fpv_behind`** (`first_person_behind`): Close over-the-shoulder follow camera 0.8m behind robot.
+- **`fpv`** (`first_person_camera`): True eye-level first-person view from the robot's head looking forward.
+- **`free`**: Interactive orbit free camera.
+
+Launch with:
+```bash
+./run_sim.sh --camera chase
+./run_sim.sh --camera fpv
+```
+
+In the interactive console:
+```text
+camera list                 # Show all available cameras with active marker
+camera chase                # Switch to chase follow camera behind robot
+camera fpv                  # Switch to head eye-level FPV
+camera free                 # Switch to orbit camera
+camera cycle                # Cycle through views
+```
+**In live game teleoperation (`drive` mode), simply press `V` to cycle camera views in real time!**
 
 ### Official Policy Continuous Control & Recovery
 - **Continuous Policy Execution:** Direct control simulation runs the official ONNX neural network policy (`policy.onnx`, 78 observations $\rightarrow$ 23 actions at 50 Hz).
@@ -238,6 +277,7 @@ You can also steer and gesture instantly using single-key shortcuts in both the 
 - `a` / `d`: Lateral velocity ($0.05\,\text{m/s}$ steps)
 - `q` / `e`: Yaw angular velocity ($0.10\,\text{rad/s}$ steps)
 - `space`: Stop / zero-velocity hold
+- `v`: **Cycle Camera View** (Chase ➔ FPV Behind ➔ FPV Head ➔ Free Orbit)
 - `1` - `4`: Physical disturbance pushes ($40\,\text{N}$, $80\,\text{N}$, $150\,\text{N}$, $250\,\text{N}$)
 - `o`: **Spawn Obstacle** (drop dynamic object in front of robot)
 - `f`: **Safe Fall** (compliant damping descent)
