@@ -1410,6 +1410,7 @@ class SimBackend:
                 "gravity": [float(x) for x in cfg.get("gravity", [0.0, 0.0, -9.81])],
                 "obstacles": cfg.get("obstacles", []),
                 "obstacle_count": len(cfg.get("obstacles", [])),
+                "generated_model_path": str(self.env_manager.generated_model_path) if self.env_manager.generated_model_path else "",
             }
 
     def get_state(self) -> Dict[str, Any]:

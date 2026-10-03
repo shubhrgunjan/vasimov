@@ -456,18 +456,25 @@ class SimConsole:
         """Dynamically update existing viewer window with new model/data in-place."""
         if not self.use_viewer:
             return False
-        if self.viewer is None:
+        if self.viewer is None or not self.viewer.is_running():
             return self.start_viewer()
         try:
-            if hasattr(self.viewer, "_sim"):
-                sim = self.viewer._sim()
-                if sim is not None and hasattr(sim, "load"):
-                    model_path = str(gen_path or getattr(self.backend.env_manager, "generated_model_path", ""))
-                    with self.viewer.lock():
-                        sim.load(self.backend.model, self.backend.data, model_path)
-                    self.set_camera(self.active_camera)
-                    log.info("[VIEWER] Live viewer model updated to '%s' in-place.", model_path)
-                    return True
+            sim = self.viewer._get_sim()
+            if sim is not None and hasattr(sim, "load"):
+                model_path = str(gen_path or getattr(self.backend.env_manager, "generated_model_path", ""))
+                # Note: Simulate::Load acquires its non-recursive mutex internally in C++.
+                # Do NOT wrap sim.load in self.viewer.lock() as that causes self-deadlock on the UI thread.
+                sim.load(self.backend.model, self.backend.data, model_path)
+                if hasattr(sim, "load_message_clear"):
+                    sim.load_message_clear()
+                # Update camera tracking body to pelvis_link in new model
+                pelvis_id = mujoco.mj_name2id(self.backend.model, mujoco.mjtObj.mjOBJ_BODY, "pelvis_link")
+                if pelvis_id != -1 and self.viewer.cam is not None:
+                    self.viewer.cam.trackbodyid = pelvis_id
+                self.set_camera(self.active_camera)
+                self.viewer.sync()
+                log.info("[VIEWER] Live viewer model updated to '%s' in-place.", model_path)
+                return True
         except Exception as e:
             log.warning("[VIEWER] Dynamic in-place model reload failed: %s; attempting restart.", e)
         return self.restart_viewer()
@@ -496,8 +503,7 @@ class SimConsole:
                 try:
                     if self.viewer.is_running():
                         if self.backend.step_count % 4 == 0:
-                            with self.viewer.lock():
-                                self.viewer.sync()
+                            self.viewer.sync()
                     else:
                         log.info("[VIEWER] Viewer closed by user.")
                         self.viewer = None
@@ -1128,11 +1134,12 @@ class SimConsole:
                 if len(args) > 1:
                     preset_arg = " ".join(args[1:]).strip()
                     try:
-                        res = self.backend.load_environment(preset_arg)
-                        if self.use_viewer:
-                            self.reload_viewer_model(res.get("generated_model_path"))
-                        if self.gateway and hasattr(self.gateway, "camera_streamer") and self.gateway.camera_streamer:
-                            self.gateway.camera_streamer._sync_model_if_changed()
+                        with self.backend._lock:
+                            res = self.backend.load_environment(preset_arg)
+                            if self.use_viewer:
+                                self.reload_viewer_model(res.get("generated_model_path"))
+                            if self.gateway and hasattr(self.gateway, "camera_streamer") and self.gateway.camera_streamer:
+                                self.gateway.camera_streamer._sync_model_if_changed()
                         print(f"Successfully loaded environment '{preset_arg}':")
                         print(f"  Friction: mu={res['ground_friction']}, Mass scale: {res['mass_scale']}, Obstacles: {res['obstacle_count']}")
                     except Exception as e:
@@ -1140,11 +1147,12 @@ class SimConsole:
                 else:
                     print("Usage: env load <preset_or_file_path>")
             elif args[0] == "reset":
-                res = self.backend.load_environment(self.backend.env_manager.current_preset)
-                if self.use_viewer:
-                    self.reload_viewer_model(res.get("generated_model_path"))
-                if self.gateway and hasattr(self.gateway, "camera_streamer") and self.gateway.camera_streamer:
-                    self.gateway.camera_streamer._sync_model_if_changed()
+                with self.backend._lock:
+                    res = self.backend.load_environment(self.backend.env_manager.current_preset)
+                    if self.use_viewer:
+                        self.reload_viewer_model(res.get("generated_model_path"))
+                    if self.gateway and hasattr(self.gateway, "camera_streamer") and self.gateway.camera_streamer:
+                        self.gateway.camera_streamer._sync_model_if_changed()
                 print(f"Reset environment to nominal: {self.backend.env_manager.current_preset}")
 
 
