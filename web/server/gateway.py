@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Set
 from urllib.parse import parse_qs, urlparse
 
 import websockets
+import numpy as np
 
 from edge.core import EdgeCore
 from edge.sim import SimBackend, compute_projected_gravity
@@ -67,6 +68,7 @@ class WebGateway:
         self.camera_streamer = CameraStreamer(backend)
         self.replay_manager = ReplayManager()
         self.control_handler = ControlHandler(backend, core, telemetry_engine, replay_manager=self.replay_manager)
+        self.control_handler.camera_streamer = self.camera_streamer
         self.webrtc_gateway = WebRTCGateway(backend, core, self.control_handler)
 
         # State cache
@@ -225,7 +227,7 @@ class WebGateway:
                     # Handle binary or JSON client command over websocket
                     try:
                         if isinstance(message, (bytes, bytearray)):
-                            from vasimov.web.server.webrtc_gateway import BinaryProtocol
+                            from web.server.webrtc_gateway import BinaryProtocol
                             parsed = BinaryProtocol.unpack_control(bytes(message))
                             if parsed:
                                 ack = self.control_handler.handle_command(parsed["action"], parsed["params"])
@@ -436,9 +438,43 @@ class WebGateway:
                     self.wfile.write(body)
                     return
 
+                # 6b. Continuous 60 FPS multipart MJPEG stream (high-performance fallback over standard HTTP)
+                if path in ("/api/camera/stream", "/api/camera/mjpeg"):
+                    cam_name = query.get("camera", ["chase_camera"])[0]
+                    xray = query.get("xray", ["0"])[0] in ("1", "true")
+                    if hasattr(gateway, "camera_streamer") and gateway.camera_streamer is not None:
+                        gateway.camera_streamer.primary_camera = cam_name
+                    self.send_response(200)
+                    self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+                    self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                    self.send_header("Pragma", "no-cache")
+                    self.send_header("Expires", "0")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+
+                    last_seq = -1
+                    try:
+                        while gateway.running:
+                            frame = gateway.camera_streamer.get_latest_frame(cam_name, xray)
+                            if frame and frame.get("jpeg") and frame.get("seq", 0) != last_seq:
+                                last_seq = frame.get("seq", 0)
+                                jpeg = frame["jpeg"]
+                                header = (
+                                    b"--frame\r\n"
+                                    b"Content-Type: image/jpeg\r\n"
+                                    b"Content-Length: " + str(len(jpeg)).encode("ascii") + b"\r\n\r\n"
+                                )
+                                self.wfile.write(header)
+                                self.wfile.write(jpeg)
+                                self.wfile.write(b"\r\n")
+                            time.sleep(0.016)
+                    except (BrokenPipeError, ConnectionResetError):
+                        return
+                    return
+
                 # 7. /api/camera/frame snapshot
                 if path == "/api/camera/frame":
-                    cam_name = query.get("camera", ["front_camera"])[0]
+                    cam_name = query.get("camera", ["chase_camera"])[0]
                     xray = query.get("xray", ["0"])[0] in ("1", "true")
                     frame = gateway.camera_streamer.get_latest_frame(cam_name, xray)
                     if frame and frame.get("jpeg"):
@@ -520,6 +556,18 @@ class WebGateway:
 
                 # 1. Backward-compatible /control endpoint
                 if path == "/control":
+                    if "action" in req_data:
+                        action = req_data.get("action", "")
+                        params = req_data.get("params", {})
+                        resp = gateway.control_handler.handle_command(action, params)
+                        out = json.dumps(resp).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Content-Length", str(len(out)))
+                        self.end_headers()
+                        self.wfile.write(out)
+                        return
+
                     cmd = req_data.get("command", "").lower()
                     if cmd == "gantry":
                         state = req_data.get("state", "off").lower()
@@ -584,6 +632,8 @@ class WebGateway:
                 if path == "/api/webrtc/camera":
                     cam_name = req_data.get("camera", "chase_camera")
                     gateway.webrtc_gateway.switch_camera(cam_name)
+                    if hasattr(gateway, "camera_streamer") and gateway.camera_streamer is not None:
+                        gateway.camera_streamer.primary_camera = cam_name
                     resp = {"status": "ok", "camera": gateway.webrtc_gateway.active_camera}
                     out = json.dumps(resp).encode("utf-8")
                     self.send_response(200)

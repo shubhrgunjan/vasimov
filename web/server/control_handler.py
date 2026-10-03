@@ -72,29 +72,31 @@ class ControlHandler:
         }
 
         # ── 1. STAND ─────────────────────────────────────────────────────────
-        if action == "stand":
+        if action in ("stand", "arm"):
             ack["lifecycle"]["parsed"] = {"action": "STAND"}
+            self.core.set_active_controller("sdk")
             if self.core.fault_latched:
-                ack["status"] = "rejected"
-                ack["lifecycle"]["validation"] = "REJECTED: Firmware fault latched"
-                ack["lifecycle"]["reason"] = f"Fault flags 0x{self.core.error_flags:x}"
-                return ack
+                self.core.clear_fault("web_cmd")
 
             cur_pos = [float(self.backend.data.qpos[adr]) for adr in self.backend.actuator_qposadr]
             sim_t = float(self.backend.data.time)
             ok = self.core.command_stand("sdk", current_sim_pos=cur_pos, current_time=sim_t)
             if ok:
+                self.core.stand_settled = True
+                if getattr(self.backend, "gantry_active", False):
+                    self.backend.set_gantry(False)
                 ack["status"] = "accepted"
-                ack["lifecycle"]["applied"] = "EdgeCore.command_stand -> STAND ramp 2.0s"
+                ack["lifecycle"]["applied"] = "EdgeCore.command_stand -> STAND active"
                 ack["lifecycle"]["simulator_result"] = f"mode = STAND, base_z = {self.backend.data.qpos[2]:.4f}m"
-                self.record_event(f"Command STAND: ramping to default pose (sim_t={sim_t:.2f}s)")
+                self.record_event(f"Command STAND: standing pose engaged (sim_t={sim_t:.2f}s)")
             else:
                 ack["status"] = "rejected"
                 ack["lifecycle"]["validation"] = "REJECTED: command_stand failed"
 
         # ── 1b. DAMP ─────────────────────────────────────────────────────────
-        elif action == "damp":
+        elif action in ("damp", "park", "disarm"):
             ack["lifecycle"]["parsed"] = {"action": "DAMP"}
+            self.core.set_active_controller("sdk")
             sim_t = float(self.backend.data.time)
             ok = self.core.command_damp("sdk", current_time=sim_t)
             if ok:
@@ -105,6 +107,47 @@ class ControlHandler:
             else:
                 ack["status"] = "rejected"
                 ack["lifecycle"]["validation"] = "REJECTED: command_damp failed"
+
+        # ── 1c. GETUP / RECOVER ──────────────────────────────────────────────
+        elif action in ("getup", "recover", "standup"):
+            ack["lifecycle"]["parsed"] = {"action": "RECOVER / GETUP"}
+            self.core.set_active_controller("sdk")
+            if self.core.fault_latched:
+                self.core.clear_fault("web_cmd")
+
+            if hasattr(self.backend, "getup"):
+                res = self.backend.getup()
+                ack["status"] = "accepted"
+                ack["lifecycle"]["applied"] = res.get("message", "Neural recovery getup initiated")
+                ack["lifecycle"]["simulator_result"] = f"mode = {res.get('edge_mode')}, base_z = {res.get('base_z', 0.0):.4f}m"
+                self.record_event(f"Command RECOVER: {res.get('message', 'neural recovery')}")
+            else:
+                cur_pos = [float(self.backend.data.qpos[adr]) for adr in self.backend.actuator_qposadr]
+                sim_t = float(self.backend.data.time)
+                self.core.command_stand("sdk", current_sim_pos=cur_pos, current_time=sim_t)
+                self.core.stand_settled = True
+                if getattr(self.backend, "gantry_active", False):
+                    self.backend.set_gantry(False)
+                ack["status"] = "accepted"
+                ack["lifecycle"]["applied"] = "Recovered to STAND pose"
+                self.record_event("Command RECOVER: recovered to STAND")
+
+        # ── 1d. FALL / SAFE FALL ─────────────────────────────────────────────
+        elif action in ("fall", "safefall", "safe_fall"):
+            ack["lifecycle"]["parsed"] = {"action": "SAFE FALL"}
+            self.core.set_active_controller("sdk")
+            if hasattr(self.backend, "safe_fall"):
+                res = self.backend.safe_fall()
+                ack["status"] = "accepted"
+                ack["lifecycle"]["applied"] = res.get("message", "Safe fall policy active")
+                ack["lifecycle"]["simulator_result"] = f"mode = {res.get('edge_mode')}"
+                self.record_event("Command SAFE FALL executed")
+            else:
+                sim_t = float(self.backend.data.time)
+                self.core.command_damp("sdk", current_time=sim_t)
+                ack["status"] = "accepted"
+                ack["lifecycle"]["applied"] = "Compliant fall damping active"
+                self.record_event("Command SAFE FALL: compliant damping engaged")
 
         # ── 2. WALK ──────────────────────────────────────────────────────────
         elif action == "walk":
@@ -140,7 +183,25 @@ class ControlHandler:
 
             # Apply
             sim_t = float(self.backend.data.time)
-            ok = self.core.command_velocity(cvx, cvy, cwz, current_time=sim_t)
+            self.core.set_active_controller("sdk")
+            if self.core.fault_latched:
+                self.core.clear_fault("web_cmd")
+
+            # Auto-arm from DAMP / SETTLE into STAND if user commands velocity
+            from edge.core import EdgeMode, MoveSubmode
+            if self.core.mode not in (EdgeMode.STAND, EdgeMode.MOVE):
+                cur_pos = [float(self.backend.data.qpos[adr]) for adr in self.backend.actuator_qposadr]
+                self.core.command_stand("sdk", current_sim_pos=cur_pos, current_time=sim_t)
+                self.core.stand_settled = True
+
+            if self.core.mode == EdgeMode.STAND and not self.core.stand_settled:
+                self.core.stand_settled = True
+
+            # Release virtual gantry for policy walking
+            if getattr(self.backend, "gantry_active", False):
+                self.backend.set_gantry(False)
+
+            ok = self.core.command_velocity(cvx, cvy, cwz, controller="sdk", current_time=sim_t)
             if ok:
                 ack["status"] = "accepted"
                 ack["lifecycle"]["applied"] = f"MOVE/POLICY vx={cvx:+.2f}, vy={cvy:+.2f}, wz={cwz:+.2f}"
@@ -153,8 +214,11 @@ class ControlHandler:
         # ── 3. STOP ──────────────────────────────────────────────────────────
         elif action == "stop":
             ack["lifecycle"]["parsed"] = {"action": "STOP (zero velocity hold)"}
+            self.core.set_active_controller("sdk")
             sim_t = float(self.backend.data.time)
-            self.core.command_velocity(0.0, 0.0, 0.0, current_time=sim_t)
+            from edge.core import EdgeMode
+            if self.core.mode == EdgeMode.MOVE:
+                self.core.command_velocity(0.0, 0.0, 0.0, controller="sdk", current_time=sim_t)
             ack["status"] = "accepted"
             ack["lifecycle"]["applied"] = "Zero commanded velocity"
             ack["lifecycle"]["simulator_result"] = f"mode = {self.core.mode.name}, body_vx = {self.backend.data.qvel[0]:.3f} m/s"
@@ -260,6 +324,11 @@ class ControlHandler:
             preset = str(params.get("preset", "flat")).strip()
             if preset in PRESETS:
                 self.backend.load_environment(preset)
+                if hasattr(self, "camera_streamer") and self.camera_streamer:
+                    try:
+                        self.camera_streamer._sync_model_if_changed()
+                    except Exception:
+                        pass
                 ack["status"] = "accepted"
                 ack["lifecycle"]["applied"] = f"Loaded preset '{preset}'"
                 ack["lifecycle"]["simulator_result"] = f"env = {preset}, friction = {PRESETS[preset]['ground_friction']}"

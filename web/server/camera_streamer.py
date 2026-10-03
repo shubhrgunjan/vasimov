@@ -35,10 +35,10 @@ from PIL import Image
 
 log = logging.getLogger("vasimov.web.camera")
 
-DEFAULT_WIDTH = 640
-DEFAULT_HEIGHT = 480
+DEFAULT_WIDTH = 960
+DEFAULT_HEIGHT = 540
 THUMB_WIDTH = 320
-THUMB_HEIGHT = 240
+THUMB_HEIGHT = 180
 
 
 class CameraStreamer:
@@ -80,7 +80,7 @@ class CameraStreamer:
         self._render_lock = threading.Lock()
         self.frame_sequences: Dict[str, int] = {c: 0 for c in self.all_cameras}
         self.active_subscribers: Dict[str, int] = {}
-        self.primary_camera: str = self.model_cameras[0] if self.model_cameras else "viewer_camera"
+        self.primary_camera: str = "chase_camera" if "chase_camera" in self.all_cameras else (self.model_cameras[0] if self.model_cameras else "viewer_camera")
         self.primary_xray: bool = False
         self.frame_listeners: List[Callable[[str, np.ndarray, float], None]] = []
         self.target_fps: int = 25
@@ -120,13 +120,6 @@ class CameraStreamer:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.0)
         self._thread = None
-        with self._render_lock:
-            if self.renderer is not None:
-                try:
-                    self.renderer.close()
-                except Exception:
-                    pass
-                self.renderer = None
         log.info("[CAMERA] Streamer stopped.")
 
     def set_orbit_camera(self, azimuth: Optional[float] = None, elevation: Optional[float] = None, distance: Optional[float] = None) -> None:
@@ -153,6 +146,11 @@ class CameraStreamer:
                 else:
                     self.renderer.update_scene(self.render_data, camera=camera_name, scene_option=vopt)
 
+                # High-speed teleoperation rendering: disable expensive shadow and reflection passes
+                if hasattr(self.renderer, "scene") and self.renderer.scene is not None:
+                    self.renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = 0
+                    self.renderer.scene.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = 0
+
                 rgb = self.renderer.render()
 
                 # Dispatch uncompressed raw RGB frame to realtime listeners (WebRTC)
@@ -164,7 +162,7 @@ class CameraStreamer:
                             log.debug("[CAMERA] Frame listener error: %s", e)
 
                 buf = io.BytesIO()
-                Image.fromarray(rgb).save(buf, format="JPEG", quality=75)
+                Image.fromarray(rgb).save(buf, format="JPEG", quality=88)
                 jpeg_bytes = buf.getvalue()
 
                 seq = self.frame_sequences.get(camera_name, 0) + 1
@@ -192,6 +190,10 @@ class CameraStreamer:
             with self._render_lock:
                 self.model = self.backend.model
                 self.render_data = mujoco.MjData(self.model)
+                try:
+                    mujoco.mj_forward(self.model, self.render_data)
+                except Exception:
+                    pass
                 if self.renderer is not None:
                     try:
                         self.renderer.close()
@@ -210,7 +212,17 @@ class CameraStreamer:
                     self.model_cameras.append(cname)
                 self.all_cameras = list(self.model_cameras) + ["viewer_camera"]
                 if self.primary_camera not in self.all_cameras:
-                    self.primary_camera = self.model_cameras[0] if self.model_cameras else "viewer_camera"
+                    self.primary_camera = "chase_camera" if "chase_camera" in self.all_cameras else (self.model_cameras[0] if self.model_cameras else "viewer_camera")
+
+                # Update viewer tracking body
+                pelvis_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "pelvis_link")
+                if pelvis_id != -1:
+                    self.viewer_cam.trackbodyid = pelvis_id
+
+                # Clear frame cache so client immediately fetches new environment
+                with self._lock:
+                    self.frame_cache.clear()
+
                 log.info("[CAMERA] Synchronized offscreen renderer to new model (%d cameras, %d geoms)", len(self.model_cameras), self.model.ngeom)
 
     def _render_loop(self) -> None:
@@ -222,40 +234,38 @@ class CameraStreamer:
             log.error("[CAMERA] Could not initialize MuJoCo Renderer: %s", e)
             return
 
-        last_secondary_render = 0.0
+        try:
+            while self.running:
+                t0 = time.perf_counter()
 
-        while self.running:
-            t0 = time.perf_counter()
+                # Atomically copy current simulation state in <0.4ms
+                with self.backend._lock:
+                    self._sync_model_if_changed()
+                    sim_time = float(self.backend.data.time)
+                    try:
+                        mujoco.mj_copyData(self.render_data, self.model, self.backend.data)
+                    except Exception as e:
+                        log.debug("[CAMERA] mj_copyData error during state copy: %s", e)
+                        continue
 
-            # Atomically copy current simulation state in <0.4ms
-            with self.backend._lock:
-                self._sync_model_if_changed()
-                sim_time = float(self.backend.data.time)
-                try:
-                    mujoco.mj_copyData(self.render_data, self.model, self.backend.data)
-                except Exception as e:
-                    log.debug("[CAMERA] mj_copyData error during state copy: %s", e)
-                    continue
+                # Render primary active camera (100% frame budget dedicated to live operator feed)
+                self._render_single(self.primary_camera, self.primary_xray, sim_time)
+                if self.primary_xray:
+                    self._render_single(self.primary_camera, False, sim_time)
 
-            # 1. Always render primary live camera (solid + xray if active)
-            self._render_single(self.primary_camera, self.primary_xray, sim_time)
-            if self.primary_xray:
-                # Also maintain solid for preview
-                self._render_single(self.primary_camera, False, sim_time)
-
-            # 2. Render other camera thumbnails periodically (~5-10 Hz)
-            now = time.perf_counter()
-            if now - last_secondary_render >= 0.15:
-                last_secondary_render = now
-                for cam in self.all_cameras:
-                    if cam != self.primary_camera:
-                        self._render_single(cam, False, sim_time)
-
-            elapsed = time.perf_counter() - t0
-            target_dt = 1.0 / float(self.target_fps)  # adaptive (25 FPS or 60 FPS)
-            sleep_time = target_dt - elapsed
-            if sleep_time > 0:
-                time.sleep(sleep_time)
+                elapsed = time.perf_counter() - t0
+                target_dt = 1.0 / float(self.target_fps)  # adaptive (25 FPS or 60 FPS)
+                sleep_time = target_dt - elapsed
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+        finally:
+            with self._render_lock:
+                if self.renderer is not None:
+                    try:
+                        self.renderer.close()
+                    except Exception:
+                        pass
+                    self.renderer = None
 
     def get_latest_frame(self, camera_name: str = "front_camera", xray: bool = False) -> Optional[Dict[str, Any]]:
         """Retrieve latest cached JPEG frame and metadata."""

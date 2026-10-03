@@ -241,8 +241,8 @@ class WebRTCGateway:
         api_secret: str = "secret",
         livekit_url: str = "ws://127.0.0.1:7880",
         room_name: str = "vasimov-teleop",
-        default_width: int = 1280,
-        default_height: int = 720,
+        default_width: int = 960,
+        default_height: int = 540,
         target_fps: int = 60,
     ):
         self.backend = backend

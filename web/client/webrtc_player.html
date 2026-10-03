@@ -108,13 +108,14 @@
 </head>
 <body>
   <div id="video-container">
-    <video id="remote-video" autoplay playsinline muted></video>
+    <img id="stream-fallback" alt="Live Stream" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+    <video id="remote-video" autoplay playsinline muted style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; display: none;"></video>
   </div>
 
   <div id="status-overlay">
     <div class="spinner"></div>
-    <div id="status-title" class="status-text">INITIALIZING WEBRTC H.264 PIPELINE</div>
-    <div id="status-detail" class="status-sub">Connecting to VASIMOV LiveKit room...</div>
+    <div id="status-title" class="status-text">INITIALIZING OPERATOR VIEWPORT</div>
+    <div id="status-detail" class="status-sub">Connecting to Virtual Asimov...</div>
   </div>
 
   <div id="debug-hud">
@@ -131,12 +132,21 @@
       const identity = urlParams.get('identity') || 'android-teleop-' + Math.floor(Math.random() * 1000);
       const isStandalone = urlParams.get('debug') === '1';
       let latencyMode = urlParams.get('mode') || 'LOW_LATENCY'; // LOW_LATENCY | BALANCED | QUALITY
+      let activeCam = urlParams.get('camera') || 'chase_camera';
 
       const videoEl = document.getElementById('remote-video');
+      const streamFallbackEl = document.getElementById('stream-fallback');
       const overlayEl = document.getElementById('status-overlay');
       const titleEl = document.getElementById('status-title');
       const detailEl = document.getElementById('status-detail');
       const debugHudEl = document.getElementById('debug-hud');
+
+      // Start continuous high-performance stream immediately
+      streamFallbackEl.src = `/api/camera/stream?camera=${encodeURIComponent(activeCam)}`;
+      streamFallbackEl.onload = function() {
+        overlayEl.classList.add('hidden');
+        postToNative({ type: 'video_active' });
+      };
 
       if (isStandalone) {
         debugHudEl.style.display = 'block';
@@ -263,6 +273,8 @@
             if (track.kind === 'video') {
               activeTrack = track;
               track.attach(videoEl);
+              videoEl.style.display = 'block';
+              streamFallbackEl.style.display = 'none';
 
               // Low-latency configuration on native HTML5 video element
               if ('playoutDelayHint' in videoEl) {
@@ -282,7 +294,9 @@
             if (track.kind === 'video') {
               track.detach(videoEl);
               activeTrack = null;
-              updateStatus('CAMERA TRACK STOPPED', 'Waiting for simulator camera track...', true);
+              videoEl.style.display = 'none';
+              streamFallbackEl.style.display = 'block';
+              updateStatus('CAMERA TRACK STOPPED', 'Streaming fallback camera...', false);
             }
           });
 
@@ -460,6 +474,10 @@
         }
         // 2. Switch camera stream
         else if (msg.type === 'switch_camera') {
+          activeCam = msg.camera;
+          if (streamFallbackEl) {
+            streamFallbackEl.src = `/api/camera/stream?camera=${encodeURIComponent(activeCam)}`;
+          }
           fetch('/api/webrtc/camera', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

@@ -452,6 +452,25 @@ class SimConsole:
 
         return self.start_viewer(timeout=timeout)
 
+    def reload_viewer_model(self, gen_path: Optional[str] = None) -> bool:
+        """Dynamically update existing viewer window with new model/data in-place."""
+        if not self.use_viewer:
+            return False
+        if self.viewer is None:
+            return self.start_viewer()
+        try:
+            if hasattr(self.viewer, "_sim"):
+                sim = self.viewer._sim()
+                if sim is not None and hasattr(sim, "load"):
+                    model_path = str(gen_path or getattr(self.backend.env_manager, "generated_model_path", ""))
+                    with self.viewer.lock():
+                        sim.load(self.backend.model, self.backend.data, model_path)
+                    self.set_camera(self.active_camera)
+                    log.info("[VIEWER] Live viewer model updated to '%s' in-place.", model_path)
+                    return True
+        except Exception as e:
+            log.warning("[VIEWER] Dynamic in-place model reload failed: %s; attempting restart.", e)
+        return self.restart_viewer()
 
     def _physics_loop(self) -> None:
         """Background 200 Hz physics simulation loop."""
@@ -477,7 +496,8 @@ class SimConsole:
                 try:
                     if self.viewer.is_running():
                         if self.backend.step_count % 4 == 0:
-                            self.viewer.sync()
+                            with self.viewer.lock():
+                                self.viewer.sync()
                     else:
                         log.info("[VIEWER] Viewer closed by user.")
                         self.viewer = None
@@ -1110,7 +1130,9 @@ class SimConsole:
                     try:
                         res = self.backend.load_environment(preset_arg)
                         if self.use_viewer:
-                            self.restart_viewer()
+                            self.reload_viewer_model(res.get("generated_model_path"))
+                        if self.gateway and hasattr(self.gateway, "camera_streamer") and self.gateway.camera_streamer:
+                            self.gateway.camera_streamer._sync_model_if_changed()
                         print(f"Successfully loaded environment '{preset_arg}':")
                         print(f"  Friction: mu={res['ground_friction']}, Mass scale: {res['mass_scale']}, Obstacles: {res['obstacle_count']}")
                     except Exception as e:
@@ -1118,9 +1140,11 @@ class SimConsole:
                 else:
                     print("Usage: env load <preset_or_file_path>")
             elif args[0] == "reset":
-                self.backend.load_environment(self.backend.env_manager.current_preset)
+                res = self.backend.load_environment(self.backend.env_manager.current_preset)
                 if self.use_viewer:
-                    self.restart_viewer()
+                    self.reload_viewer_model(res.get("generated_model_path"))
+                if self.gateway and hasattr(self.gateway, "camera_streamer") and self.gateway.camera_streamer:
+                    self.gateway.camera_streamer._sync_model_if_changed()
                 print(f"Reset environment to nominal: {self.backend.env_manager.current_preset}")
 
 

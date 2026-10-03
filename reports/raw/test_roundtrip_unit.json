@@ -1,18 +1,18 @@
 {
   "metadata": {
     "name": "test_roundtrip_unit",
-    "start_wall_time": 1791015247.239373,
+    "start_wall_time": 1791028386.087728,
     "custom_metadata": {
       "test": true,
       "seed": 42
     },
-    "end_wall_time": 1791015247.252964,
+    "end_wall_time": 1791028386.1541278,
     "frame_count": 25
   },
   "frames": [
     {
       "sim_time": 0.005,
-      "wall_time": 1791015247.239994,
+      "wall_time": 1791028386.105032,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -196,7 +196,7 @@
     },
     {
       "sim_time": 0.01,
-      "wall_time": 1791015247.240562,
+      "wall_time": 1791028386.10765,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -380,7 +380,7 @@
     },
     {
       "sim_time": 0.015,
-      "wall_time": 1791015247.241416,
+      "wall_time": 1791028386.1091452,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -564,7 +564,7 @@
     },
     {
       "sim_time": 0.02,
-      "wall_time": 1791015247.242028,
+      "wall_time": 1791028386.112853,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -748,7 +748,7 @@
     },
     {
       "sim_time": 0.025,
-      "wall_time": 1791015247.2427468,
+      "wall_time": 1791028386.115252,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -932,7 +932,7 @@
     },
     {
       "sim_time": 0.030000000000000002,
-      "wall_time": 1791015247.243265,
+      "wall_time": 1791028386.1164641,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -1116,7 +1116,7 @@
     },
     {
       "sim_time": 0.035,
-      "wall_time": 1791015247.243744,
+      "wall_time": 1791028386.118281,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -1300,7 +1300,7 @@
     },
     {
       "sim_time": 0.04,
-      "wall_time": 1791015247.2442272,
+      "wall_time": 1791028386.121139,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -1484,7 +1484,7 @@
     },
     {
       "sim_time": 0.045,
-      "wall_time": 1791015247.244818,
+      "wall_time": 1791028386.124322,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -1668,7 +1668,7 @@
     },
     {
       "sim_time": 0.049999999999999996,
-      "wall_time": 1791015247.245295,
+      "wall_time": 1791028386.126501,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -1852,7 +1852,7 @@
     },
     {
       "sim_time": 0.05499999999999999,
-      "wall_time": 1791015247.245816,
+      "wall_time": 1791028386.1283982,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -2036,7 +2036,7 @@
     },
     {
       "sim_time": 0.05999999999999999,
-      "wall_time": 1791015247.246291,
+      "wall_time": 1791028386.1300821,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -2220,7 +2220,7 @@
     },
     {
       "sim_time": 0.06499999999999999,
-      "wall_time": 1791015247.246869,
+      "wall_time": 1791028386.131863,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -2404,7 +2404,7 @@
     },
     {
       "sim_time": 0.06999999999999999,
-      "wall_time": 1791015247.247326,
+      "wall_time": 1791028386.133255,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -2588,7 +2588,7 @@
     },
     {
       "sim_time": 0.075,
-      "wall_time": 1791015247.247821,
+      "wall_time": 1791028386.134915,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -2772,7 +2772,7 @@
     },
     {
       "sim_time": 0.08,
-      "wall_time": 1791015247.248311,
+      "wall_time": 1791028386.136203,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -2956,7 +2956,7 @@
     },
     {
       "sim_time": 0.085,
-      "wall_time": 1791015247.248883,
+      "wall_time": 1791028386.138731,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -3140,7 +3140,7 @@
     },
     {
       "sim_time": 0.09000000000000001,
-      "wall_time": 1791015247.249362,
+      "wall_time": 1791028386.1412961,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -3324,7 +3324,7 @@
     },
     {
       "sim_time": 0.09500000000000001,
-      "wall_time": 1791015247.249824,
+      "wall_time": 1791028386.143135,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -3508,7 +3508,7 @@
     },
     {
       "sim_time": 0.10000000000000002,
-      "wall_time": 1791015247.2503512,
+      "wall_time": 1791028386.144808,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -3692,7 +3692,7 @@
     },
     {
       "sim_time": 0.10500000000000002,
-      "wall_time": 1791015247.250886,
+      "wall_time": 1791028386.146927,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -3876,7 +3876,7 @@
     },
     {
       "sim_time": 0.11000000000000003,
-      "wall_time": 1791015247.251327,
+      "wall_time": 1791028386.148222,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -4060,7 +4060,7 @@
     },
     {
       "sim_time": 0.11500000000000003,
-      "wall_time": 1791015247.25178,
+      "wall_time": 1791028386.149655,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -4244,7 +4244,7 @@
     },
     {
       "sim_time": 0.12000000000000004,
-      "wall_time": 1791015247.252227,
+      "wall_time": 1791028386.151382,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
@@ -4428,7 +4428,7 @@
     },
     {
       "sim_time": 0.12500000000000003,
-      "wall_time": 1791015247.252733,
+      "wall_time": 1791028386.1532009,
       "rtf": 1.0,
       "control_mode": "policy",
       "edge_mode": "MOVE",
