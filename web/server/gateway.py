@@ -32,6 +32,7 @@ from web.server.canonical_frame import CanonicalFrameBuilder
 from web.server.camera_streamer import CameraStreamer
 from web.server.control_handler import ControlHandler
 from web.server.replay_manager import ReplayManager
+from web.server.webrtc_gateway import WebRTCGateway
 
 log = logging.getLogger("vasimov.web.gateway")
 
@@ -66,6 +67,7 @@ class WebGateway:
         self.camera_streamer = CameraStreamer(backend)
         self.replay_manager = ReplayManager()
         self.control_handler = ControlHandler(backend, core, telemetry_engine, replay_manager=self.replay_manager)
+        self.webrtc_gateway = WebRTCGateway(backend, core, self.control_handler)
 
         # State cache
         self.latest_frame: Optional[Dict[str, Any]] = None
@@ -91,8 +93,12 @@ class WebGateway:
         self.running = True
         self._shutdown_event.clear()
 
-        # 1. Start Camera Streamer worker
+        # 1. Start Camera Streamer worker & hook WebRTC frame ingestion
+        self.camera_streamer.add_frame_listener(self.webrtc_gateway.on_camera_frame)
         self.camera_streamer.start()
+
+        # 1b. Start WebRTC & LiveKit Gateway
+        self.webrtc_gateway.start()
 
         # 2. Start HTTP server
         self._start_http()
@@ -112,11 +118,13 @@ class WebGateway:
             "[GATEWAY] Started Virtual Asimov Web Gateway:\n"
             "   Dashboard: http://%s:%d\n"
             "   WebSocket: ws://%s:%d\n"
+            "   WebRTC/LK: ws://%s:7880\n"
             "   Cameras  : %s",
             self.host,
             self.http_port,
             self.host,
             self.ws_port,
+            self.host,
             self.camera_streamer.all_cameras,
         )
 
@@ -124,6 +132,9 @@ class WebGateway:
         """Stop all gateway servers cleanly."""
         self.running = False
         self._shutdown_event.set()
+
+        # Stop WebRTC Gateway
+        self.webrtc_gateway.stop()
 
         # Stop Camera Streamer
         self.camera_streamer.stop()
@@ -211,8 +222,15 @@ class WebGateway:
 
             try:
                 async for message in websocket:
-                    # Handle client command over websocket
+                    # Handle binary or JSON client command over websocket
                     try:
+                        if isinstance(message, (bytes, bytearray)):
+                            from vasimov.web.server.webrtc_gateway import BinaryProtocol
+                            parsed = BinaryProtocol.unpack_control(bytes(message))
+                            if parsed:
+                                ack = self.control_handler.handle_command(parsed["action"], parsed["params"])
+                                await websocket.send(json.dumps({"type": "ack", "ack": ack}))
+                                continue
                         data = json.loads(message)
                         action = data.get("action", "")
                         params = data.get("params", data.get("command_data", {}))
@@ -300,6 +318,20 @@ class WebGateway:
                     self.send_error(404, "Index HTML not found")
                     return
 
+                # 1b. Dedicated WebRTC Native Viewport HTML
+                if path in ("/webrtc_player.html", "/webrtc_player", "/player"):
+                    player_file = _CLIENT_DIR / "webrtc_player.html"
+                    if player_file.exists():
+                        content = player_file.read_bytes()
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/html; charset=utf-8")
+                        self.send_header("Content-Length", str(len(content)))
+                        self.end_headers()
+                        self.wfile.write(content)
+                        return
+                    self.send_error(404, "WebRTC Player HTML not found")
+                    return
+
                 # 2. Static CSS / JS assets
                 if path.startswith("/css/") or path.startswith("/js/"):
                     asset_path = _CLIENT_DIR / path.lstrip("/")
@@ -354,6 +386,38 @@ class WebGateway:
                 # 5. Modern /api/state snapshot
                 if path == "/api/state":
                     body = (gateway.latest_json or "{}").encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+
+                # 5b. WebRTC Token & LiveKit room config
+                if path == "/api/webrtc/token":
+                    identity = query.get("identity", ["android-phone"])[0]
+                    tok = gateway.webrtc_gateway.generate_token(identity=identity)
+                    req_host = self.headers.get("Host", "127.0.0.1").split(":")[0]
+                    lk_host = req_host if req_host not in ("0.0.0.0", "") else "127.0.0.1"
+                    resp = {
+                        "status": "ok",
+                        "url": f"ws://{lk_host}:7880",
+                        "token": tok,
+                        "room": gateway.webrtc_gateway.room_name,
+                        "active_camera": gateway.webrtc_gateway.active_camera,
+                    }
+                    body = json.dumps(resp).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+
+                # 5c. WebRTC Live Diagnostics & Latency Stats
+                if path == "/api/webrtc/stats":
+                    stats = gateway.webrtc_gateway.get_stats()
+                    body = json.dumps(stats).encode("utf-8")
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
                     self.send_header("Content-Length", str(len(body)))
@@ -509,6 +573,19 @@ class WebGateway:
 
                     ack = gateway.control_handler.handle_command(action, params)
                     out = json.dumps(ack).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(out)))
+                    self.end_headers()
+                    self.wfile.write(out)
+                    return
+
+                # 2b. WebRTC Camera Track Selector
+                if path == "/api/webrtc/camera":
+                    cam_name = req_data.get("camera", "chase_camera")
+                    gateway.webrtc_gateway.switch_camera(cam_name)
+                    resp = {"status": "ok", "camera": gateway.webrtc_gateway.active_camera}
+                    out = json.dumps(resp).encode("utf-8")
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
                     self.send_header("Content-Length", str(len(out)))

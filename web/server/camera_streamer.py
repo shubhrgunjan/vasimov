@@ -82,6 +82,8 @@ class CameraStreamer:
         self.active_subscribers: Dict[str, int] = {}
         self.primary_camera: str = self.model_cameras[0] if self.model_cameras else "viewer_camera"
         self.primary_xray: bool = False
+        self.frame_listeners: List[Callable[[str, np.ndarray, float], None]] = []
+        self.target_fps: int = 25
 
         # Options for Normal vs X-Ray
         self.opt_solid = mujoco.MjvOption()
@@ -90,6 +92,18 @@ class CameraStreamer:
         self.opt_xray.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = 1
         self.opt_xray.flags[mujoco.mjtVisFlag.mjVIS_ACTUATOR] = 1
         self.opt_xray.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = 1
+
+    def add_frame_listener(self, listener: Callable[[str, np.ndarray, float], None]) -> None:
+        """Register a callback for uncompressed raw RGB frames (e.g. WebRTC VideoSource)."""
+        if listener not in self.frame_listeners:
+            self.frame_listeners.append(listener)
+            self.target_fps = 60  # Elevate capture loop to 60 FPS target when WebRTC is active
+
+    def remove_frame_listener(self, listener: Callable[[str, np.ndarray, float], None]) -> None:
+        if listener in self.frame_listeners:
+            self.frame_listeners.remove(listener)
+            if not self.frame_listeners:
+                self.target_fps = 25
 
     def start(self) -> None:
         """Start the background rendering worker thread."""
@@ -140,6 +154,15 @@ class CameraStreamer:
                     self.renderer.update_scene(self.render_data, camera=camera_name, scene_option=vopt)
 
                 rgb = self.renderer.render()
+
+                # Dispatch uncompressed raw RGB frame to realtime listeners (WebRTC)
+                if not xray:
+                    for listener in list(self.frame_listeners):
+                        try:
+                            listener(camera_name, rgb, sim_time)
+                        except Exception as e:
+                            log.debug("[CAMERA] Frame listener error: %s", e)
+
                 buf = io.BytesIO()
                 Image.fromarray(rgb).save(buf, format="JPEG", quality=75)
                 jpeg_bytes = buf.getvalue()
@@ -229,7 +252,7 @@ class CameraStreamer:
                         self._render_single(cam, False, sim_time)
 
             elapsed = time.perf_counter() - t0
-            target_dt = 1.0 / 25.0  # target ~25 FPS
+            target_dt = 1.0 / float(self.target_fps)  # adaptive (25 FPS or 60 FPS)
             sleep_time = target_dt - elapsed
             if sleep_time > 0:
                 time.sleep(sleep_time)

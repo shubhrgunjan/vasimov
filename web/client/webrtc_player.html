@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>VASIMOV WebRTC Native Viewport</title>
+  <script src="/js/livekit-client.umd.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      background-color: #02040a;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      color: #e2e8f0;
+      position: fixed;
+      top: 0;
+      left: 0;
+    }
+    #video-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      z-index: 1;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      background: #000;
+      transform: translateZ(0);
+      will-change: transform;
+    }
+    #status-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(2, 4, 10, 0.92);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+    #status-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid rgba(0, 229, 255, 0.2);
+      border-top-color: #00e5ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .status-text {
+      color: #00e5ff;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .status-sub {
+      color: #64748b;
+      font-size: 11px;
+      margin-top: 6px;
+    }
+    /* Optional debug HUD when viewed standalone in browser */
+    #debug-hud {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      background: rgba(0, 0, 0, 0.65);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 10px;
+      font-family: monospace;
+      color: #00e5ff;
+      z-index: 20;
+      display: none;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="video-container">
+    <video id="remote-video" autoplay playsinline muted></video>
+  </div>
+
+  <div id="status-overlay">
+    <div class="spinner"></div>
+    <div id="status-title" class="status-text">INITIALIZING WEBRTC H.264 PIPELINE</div>
+    <div id="status-detail" class="status-sub">Connecting to VASIMOV LiveKit room...</div>
+  </div>
+
+  <div id="debug-hud">
+    <span id="hud-fps">0 FPS</span> | 
+    <span id="hud-rtt">0 ms</span> | 
+    <span id="hud-res">0x0</span> | 
+    <span id="hud-kbps">0 kbps</span>
+  </div>
+
+  <script>
+    (function() {
+      // Configuration & Query Params
+      const urlParams = new URLSearchParams(window.location.search);
+      const identity = urlParams.get('identity') || 'android-teleop-' + Math.floor(Math.random() * 1000);
+      const isStandalone = urlParams.get('debug') === '1';
+      let latencyMode = urlParams.get('mode') || 'LOW_LATENCY'; // LOW_LATENCY | BALANCED | QUALITY
+
+      const videoEl = document.getElementById('remote-video');
+      const overlayEl = document.getElementById('status-overlay');
+      const titleEl = document.getElementById('status-title');
+      const detailEl = document.getElementById('status-detail');
+      const debugHudEl = document.getElementById('debug-hud');
+
+      if (isStandalone) {
+        debugHudEl.style.display = 'block';
+      }
+
+      let currentRoom = null;
+      let activeTrack = null;
+      let isConnected = false;
+      let reconnectTimer = null;
+      let statsTimer = null;
+      let driftTimer = null;
+
+      // Teleoperation stats trackers
+      let lastBytes = 0;
+      let lastBytesTime = Date.now();
+      let lastDecodedFrames = 0;
+      let lastDecodedTime = Date.now();
+      let lastStats = {
+        fps: 0,
+        bitrateKbps: 0,
+        rttMs: 0,
+        packetLoss: 0,
+        jitterMs: 0,
+        width: 0,
+        height: 0,
+        droppedFrames: 0,
+        mode: latencyMode
+      };
+
+      // Native Bridge Communicator
+      function postToNative(msg) {
+        const payloadStr = JSON.stringify(msg);
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(payloadStr);
+        }
+      }
+
+      function updateStatus(title, detail, showOverlay = true) {
+        titleEl.textContent = title;
+        detailEl.textContent = detail;
+        if (showOverlay) {
+          overlayEl.classList.remove('hidden');
+        } else {
+          overlayEl.classList.add('hidden');
+        }
+        postToNative({ type: 'status_change', title, detail, isConnected });
+      }
+
+      // ── Main LiveKit WebRTC Connection Loop ────────────────────────────────
+      async function connectWebRTC() {
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+
+        updateStatus('ACQUIRING WEBRTC TOKEN', 'Contacting Virtual Asimov Gateway...', true);
+
+        try {
+          // 1. Fetch signed JWT Token from backend
+          const tokenRes = await fetch(`/api/webrtc/token?identity=${encodeURIComponent(identity)}`);
+          if (!tokenRes.ok) {
+            throw new Error(`Token request failed with status ${tokenRes.status}`);
+          }
+          const data = await tokenRes.json();
+          const token = data.token;
+          
+          // Connect URL: use current location host if returned is localhost/0.0.0.0
+          let livekitUrl = data.url;
+          try {
+            const parsedLk = new URL(livekitUrl);
+            if (parsedLk.hostname === '127.0.0.1' || parsedLk.hostname === '0.0.0.0' || parsedLk.hostname === 'localhost') {
+              livekitUrl = `${parsedLk.protocol}//${window.location.hostname}:7880`;
+            }
+          } catch(e) {}
+
+          updateStatus('CONNECTING WEBRTC PEER', `Connecting to ${livekitUrl}...`, true);
+
+          // 2. Instantiate LiveKit Room
+          if (typeof LivekitClient === 'undefined') {
+            throw new Error('LivekitClient library not loaded. Check /js/livekit-client.umd.js');
+          }
+
+          if (currentRoom) {
+            try { currentRoom.disconnect(); } catch(e) {}
+          }
+
+          const room = new LivekitClient.Room({
+            adaptiveStream: false, // Critical: low latency robot teleop should not downgrade/freeze
+            dynacast: false,
+            stopLocalTrackOnUnpublish: true,
+            videoCaptureDefaults: {
+              resolution: LivekitClient.VideoPresets.h720.resolution
+            }
+          });
+          currentRoom = room;
+
+          // 3. Register Room Events
+          room.on(LivekitClient.RoomEvent.Connected, () => {
+            isConnected = true;
+            updateStatus('WEBRTC CONNECTED', 'Subscribed to robot media room', true);
+            postToNative({ type: 'connected', room: room.name });
+          });
+
+          room.on(LivekitClient.RoomEvent.Disconnected, (reason) => {
+            isConnected = false;
+            activeTrack = null;
+            updateStatus('DISCONNECTED', `WebRTC disconnected: ${reason || 'Unknown'}`, true);
+            postToNative({ type: 'disconnected', reason });
+            scheduleReconnect();
+          });
+
+          room.on(LivekitClient.RoomEvent.Reconnecting, () => {
+            updateStatus('RECONNECTING', 'Network jitter detected, re-establishing peer...', true);
+            postToNative({ type: 'reconnecting' });
+          });
+
+          room.on(LivekitClient.RoomEvent.Reconnected, () => {
+            updateStatus('RECONNECTED', 'WebRTC connection restored', false);
+            postToNative({ type: 'reconnected' });
+          });
+
+          // 4. Track Subscription: Native Hardware Video Surface Attachment
+          room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+            if (track.kind === 'video') {
+              activeTrack = track;
+              track.attach(videoEl);
+
+              // Low-latency configuration on native HTML5 video element
+              if ('playoutDelayHint' in videoEl) {
+                videoEl.playoutDelayHint = 0.0; // 0ms playout buffer for near-realtime
+              }
+              videoEl.setAttribute('playsinline', 'true');
+              videoEl.setAttribute('autoplay', 'true');
+              videoEl.muted = true;
+              videoEl.play().catch(() => {});
+
+              updateStatus('STREAMING', '60 FPS H.264 Camera Feed Active', false);
+              postToNative({ type: 'video_active', trackSid: track.sid });
+            }
+          });
+
+          room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+            if (track.kind === 'video') {
+              track.detach(videoEl);
+              activeTrack = null;
+              updateStatus('CAMERA TRACK STOPPED', 'Waiting for simulator camera track...', true);
+            }
+          });
+
+          // 5. DataChannel Handling: Realtime Binary Telemetry & Commands
+          room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant, kind, topic) => {
+            if (topic === 'telemetry') {
+              // Binary 85-byte ATEL packet from simulator
+              postToNative({
+                type: 'binary_telemetry',
+                bytes: Array.from(new Uint8Array(payload))
+              });
+            } else if (topic === 'ack') {
+              try {
+                const text = new TextDecoder().decode(payload);
+                const data = JSON.parse(text);
+                postToNative({ type: 'command_ack', ack: data.ack || data });
+              } catch(e) {}
+            }
+          });
+
+          // 6. Connect to room
+          await room.connect(livekitUrl, token);
+
+          // 7. Check if tracks already published by robot
+          room.remoteParticipants.forEach(participant => {
+            participant.trackPublications.forEach(pub => {
+              if (pub.isSubscribed && pub.track && pub.track.kind === 'video') {
+                activeTrack = pub.track;
+                pub.track.attach(videoEl);
+                updateStatus('STREAMING', '60 FPS H.264 Camera Feed Active', false);
+              }
+            });
+          });
+
+          startStatsCollector();
+          startDriftMonitor();
+
+        } catch (err) {
+          isConnected = false;
+          updateStatus('WEBRTC ERROR', err.message || 'Failed to connect WebRTC', true);
+          postToNative({ type: 'error', error: err.message });
+          scheduleReconnect();
+        }
+      }
+
+      function scheduleReconnect() {
+        if (reconnectTimer) return;
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connectWebRTC();
+        }, 2000);
+      }
+
+      // ── Low-Latency Playout & Frame Buffer Drift Protection ────────────────
+      function startDriftMonitor() {
+        if (driftTimer) clearInterval(driftTimer);
+
+        driftTimer = setInterval(() => {
+          if (!videoEl || latencyMode !== 'LOW_LATENCY') return;
+          try {
+            if (videoEl.buffered && videoEl.buffered.length > 0) {
+              const bufferEnd = videoEl.buffered.end(videoEl.buffered.length - 1);
+              const drift = bufferEnd - videoEl.currentTime;
+              // If video buffer is more than 120ms behind live edge, jump to live edge immediately
+              if (drift > 0.12) {
+                videoEl.currentTime = bufferEnd;
+              }
+            }
+          } catch(e) {}
+        }, 200);
+      }
+
+      // ── WebRTC Inbound RTCStats Collector ──────────────────────────────────
+      function startStatsCollector() {
+        if (statsTimer) clearInterval(statsTimer);
+
+        statsTimer = setInterval(async () => {
+          if (!currentRoom || !isConnected) return;
+
+          let calculatedFps = 0;
+          let rtt = 0;
+          let jitter = 0;
+          let packetsLost = 0;
+          let dropped = 0;
+          let width = videoEl.videoWidth || 0;
+          let height = videoEl.videoHeight || 0;
+
+          // 1. Decoded frame count from native video element (hardware decoder)
+          const now = Date.now();
+          if ('webkitDecodedFrameCount' in videoEl) {
+            const decoded = videoEl.webkitDecodedFrameCount;
+            const dt = (now - lastDecodedTime) / 1000.0;
+            if (dt > 0.5 && lastDecodedFrames > 0) {
+              calculatedFps = Math.round((decoded - lastDecodedFrames) / dt);
+            }
+            lastDecodedFrames = decoded;
+            lastDecodedTime = now;
+            dropped = videoEl.webkitDroppedFrameCount || 0;
+          }
+
+          // 2. Query WebRTC RTCPeerConnection statistics
+          try {
+            const pc = currentRoom.engine && currentRoom.engine.pcManager && currentRoom.engine.pcManager.subscriber;
+            if (pc && pc.getStats) {
+              const report = await pc.getStats();
+              report.forEach(stat => {
+                if (stat.type === 'inbound-rtp' && stat.kind === 'video') {
+                  if (stat.framesPerSecond) calculatedFps = Math.round(stat.framesPerSecond);
+                  if (stat.jitter) jitter = Math.round(stat.jitter * 1000);
+                  if (stat.packetsLost) packetsLost = stat.packetsLost;
+                  if (stat.framesDropped) dropped = stat.framesDropped;
+
+                  if (stat.bytesReceived) {
+                    const dt = (now - lastBytesTime) / 1000.0;
+                    if (dt > 0.5 && lastBytes > 0) {
+                      lastStats.bitrateKbps = Math.round(((stat.bytesReceived - lastBytes) * 8) / (dt * 1000));
+                    }
+                    lastBytes = stat.bytesReceived;
+                    lastBytesTime = now;
+                  }
+                } else if (stat.type === 'candidate-pair' && stat.state === 'succeeded') {
+                  if (stat.currentRoundTripTime) {
+                    rtt = Math.round(stat.currentRoundTripTime * 1000);
+                  }
+                }
+              });
+            }
+          } catch(e) {}
+
+          lastStats.fps = calculatedFps;
+          lastStats.rttMs = rtt;
+          lastStats.jitterMs = jitter;
+          lastStats.packetLoss = packetsLost;
+          lastStats.droppedFrames = dropped;
+          lastStats.width = width;
+          lastStats.height = height;
+
+          // Update standalone HUD
+          if (isStandalone) {
+            document.getElementById('hud-fps').textContent = `${calculatedFps} FPS`;
+            document.getElementById('hud-rtt').textContent = `${rtt} ms`;
+            document.getElementById('hud-res').textContent = `${width}x${height}`;
+            document.getElementById('hud-kbps').textContent = `${lastStats.bitrateKbps} kbps`;
+          }
+
+          // Dispatch to React Native Host
+          postToNative({
+            type: 'webrtc_stats',
+            stats: lastStats
+          });
+        }, 1000);
+      }
+
+      // ── Native Message Ingestion (Commands & Control) ──────────────────────
+      function handleMessageFromNative(event) {
+        let msg = null;
+        try {
+          msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        } catch(e) {
+          return;
+        }
+        if (!msg || !msg.type) return;
+
+        // 1. Send binary control command over WebRTC DataChannel (Topic: commands)
+        if (msg.type === 'send_command_binary') {
+          if (currentRoom && currentRoom.localParticipant && msg.bytes) {
+            try {
+              const u8 = new Uint8Array(msg.bytes);
+              currentRoom.localParticipant.publishData(u8, {
+                reliable: false, // Low-latency UDP transport for continuous control
+                topic: 'commands'
+              });
+            } catch(e) {}
+          }
+        }
+        // 2. Switch camera stream
+        else if (msg.type === 'switch_camera') {
+          fetch('/api/webrtc/camera', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ camera: msg.camera })
+          }).catch(() => {});
+        }
+        // 3. Set latency / quality mode
+        else if (msg.type === 'set_mode') {
+          latencyMode = msg.mode || 'LOW_LATENCY';
+          lastStats.mode = latencyMode;
+        }
+        // 4. Force reconnect
+        else if (msg.type === 'reconnect') {
+          connectWebRTC();
+        }
+      }
+
+      window.addEventListener('message', handleMessageFromNative);
+      document.addEventListener('message', handleMessageFromNative);
+
+      // Start initial connection on DOM load
+      window.addEventListener('DOMContentLoaded', () => {
+        connectWebRTC();
+      });
+
+    })();
+  </script>
+</body>
+</html>
