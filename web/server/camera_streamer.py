@@ -20,8 +20,15 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
-# Ensure headless EGL rendering backend is used for offscreen worker threads
-os.environ.setdefault("MUJOCO_GL", "egl")
+# Ensure appropriate headless rendering backend is used for offscreen worker threads:
+# macOS uses CGL (Core OpenGL), Linux uses EGL, Windows uses OSMesa.
+import sys
+if sys.platform == "darwin":
+    os.environ.setdefault("MUJOCO_GL", "cgl")
+elif sys.platform.startswith("linux"):
+    os.environ.setdefault("MUJOCO_GL", "egl")
+else:
+    os.environ.setdefault("MUJOCO_GL", "osmesa")
 import mujoco
 
 from PIL import Image

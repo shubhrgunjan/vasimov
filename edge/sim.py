@@ -190,6 +190,11 @@ class SimBackend:
                     balance=balance_policy,
                     auto_compose=auto_compose,
                 )
+            if self.policy_manager is not None:
+                self.core.recovery_mode_active = (
+                    self.policy_manager.auto_compose
+                    or self.policy_manager.recovery_policy is not None
+                )
             self.policy_controller = self.policy_manager.active_policy
             log.info("[SIM] Pluggable PolicyManager loaded with active policy: '%s'", self.policy_manager.active_policy_name)
         except Exception as e:
@@ -327,9 +332,9 @@ class SimBackend:
         quat = np.array(self.data.qpos[3:7], dtype=np.float64)
         R = self.data.xmat[self.pelvis_body_id].reshape(3, 3)
         lin_vel_world = np.array(self.data.qvel[:3], dtype=np.float64)
-        ang_vel_world = np.array(self.data.qvel[3:6], dtype=np.float64)
+        ang_vel_body = np.array(self.data.qvel[3:6], dtype=np.float64)  # MuJoCo freejoint qvel[3:6] is already body frame
         lin_vel_body = R.T @ lin_vel_world
-        ang_vel_body = R.T @ ang_vel_world
+        ang_vel_world = R @ ang_vel_body  # Transform to world frame for telemetry
         proj_grav = R.T @ np.array([0.0, 0.0, -1.0], dtype=np.float64)
 
         j_pos = {
@@ -428,6 +433,16 @@ class SimBackend:
             base_quat = np.array([self.data.qpos[3], self.data.qpos[4], self.data.qpos[5], self.data.qpos[6]], dtype=np.float64)
             base_gyro = [float(self.data.qvel[3]), float(self.data.qvel[4]), float(self.data.qvel[5])]
             projected_gravity = compute_projected_gravity(base_quat)
+
+            # Sync EdgeCore recovery mode with PolicyManager before safety step
+            if hasattr(self, "policy_manager") and self.policy_manager is not None:
+                has_rec = (
+                    self.policy_manager.auto_compose
+                    or getattr(self.policy_manager, "safefall_policy", None) is not None
+                    or getattr(self.policy_manager, "getup_policy", None) is not None
+                    or (self.policy_manager.active_policy is not None and self.policy_manager.active_policy.category == "recovery")
+                )
+                self.core.recovery_mode_active = has_rec
 
             # Step EdgeCore timers, watchdogs & safety checks
             self.core.step_state(sim_time, projected_gravity)
@@ -862,40 +877,118 @@ class SimBackend:
             self.emote_controller.stop_emote()
 
     def safe_fall(self) -> Dict[str, Any]:
-        """Perform controlled safe descent: zero commanded velocity and compliant damping descent."""
+        """Perform active OpenHorizon Safe-Fall (safefall.onnx) or compliant damping descent."""
         with self._lock:
             self.emote_controller.stop_emote()
             sim_t = float(self.data.time)
-            # Zero velocity command into official policy
-            self.core.command_velocity(0.0, 0.0, 0.0, current_time=sim_t)
             # Release virtual gantry tether so descent is governed by real physics
             if self.gantry_active:
                 self.set_gantry(False)
-            # Transition firmware into compliant damping for safe ground touchdown
-            self.core.command_damp("sdk")
-            log.warning("[SIM] Safe fall triggered: robot transitioning to compliant ground descent.")
-            return {
-                "status": "safe_fall",
-                "edge_mode": self.core.mode.name,
-                "gantry": self.gantry_active,
-                "message": "Safe fall initiated: velocity zeroed, compliant joint damping to ground.",
-            }
+            self.core.command_velocity(0.0, 0.0, 0.0, current_time=sim_t)
 
-    def getup(self) -> Dict[str, Any]:
-        """Recover robot from fallen or prone state back to stable standing using the official policy."""
+            # Check if learned Safe-Fall policy is available
+            has_safefall = (
+                self.policy_manager is not None
+                and (
+                    getattr(self.policy_manager, "safefall_policy", None) is not None
+                    or getattr(self.policy_manager, "recovery_policy", None) is not None
+                )
+            )
+
+            if has_safefall:
+                self.core.virtual_restart()
+                self.core.recovery_mode_active = True
+                self.core.mode = EdgeMode.MOVE
+                self.core.move_submode = MoveSubmode.POLICY
+                from edge.policy_manager import CompositionState
+                self.policy_manager.comp_state = CompositionState.SAFEFALL
+                safefall_pol = self.policy_manager.safefall_policy or self.policy_manager.recovery_policy
+                if safefall_pol:
+                    safefall_pol.reset()
+                    if hasattr(safefall_pol, "set_subpolicy"):
+                        safefall_pol.set_subpolicy("safefall")
+                    if hasattr(safefall_pol.adapter, "fall_triggered"):
+                        safefall_pol.adapter.fall_triggered = True
+                    self.policy_manager.active_policy = safefall_pol
+                    self.policy_manager.active_policy_name = safefall_pol.name
+                log.warning("[SIM] Safe fall triggered: OpenHorizon safefall.onnx active in MOVE/POLICY mode.")
+                return {
+                    "status": "safe_fall",
+                    "edge_mode": self.core.mode.name,
+                    "gantry": self.gantry_active,
+                    "message": "OpenHorizon Safe-Fall initiated: active neural impact mitigation policy.",
+                }
+            else:
+                # Fallback to compliant damping when no learned recovery policy is loaded
+                self.core.command_damp("sdk")
+                log.warning("[SIM] Safe fall triggered: robot transitioning to compliant ground descent.")
+                return {
+                    "status": "safe_fall",
+                    "edge_mode": self.core.mode.name,
+                    "gantry": self.gantry_active,
+                    "message": "Safe fall initiated: velocity zeroed, compliant joint damping to ground.",
+                }
+
+    def getup(self, kinematic_assist: bool = False) -> Dict[str, Any]:
+        """
+        Recover robot from fallen or prone state back to stable standing.
+        If OpenHorizon recovery policy is available, executes getup.onnx (no teleportation, no gantry).
+        If no recovery policy is configured or kinematic_assist is requested, uses kinematic fallback.
+        """
         with self._lock:
             self.emote_controller.stop_emote()
             self.core.virtual_restart()
 
-            # Preserve current horizontal coordinates (x, y) - NO TELEPORTATION TO ORIGIN!
             current_x = float(self.data.qpos[0])
             current_y = float(self.data.qpos[1])
             current_z = float(self.data.qpos[2])
 
-            # In direct recovery mode, allow policy to run without being choked by FAULT_DAMP
-            self.core.fall_latch_enabled = False
+            has_getup = (
+                not kinematic_assist
+                and self.policy_manager is not None
+                and (
+                    getattr(self.policy_manager, "getup_policy", None) is not None
+                    or (
+                        getattr(self.policy_manager, "recovery_policy", None) is not None
+                        and self.policy_manager.recovery_policy.category == "recovery"
+                    )
+                )
+            )
 
-            # If robot is in a low crouch or tilted stance (z >= 0.38m), stand up dynamically via policy
+            if has_getup:
+                # LEARNED GETUP RECOVERY: OpenHorizon getup.onnx
+                # NO kinematic teleportation! NO upright coordinate overwrites! NO gantry attachment!
+                if self.gantry_active:
+                    self.set_gantry(False)
+                self.core.recovery_mode_active = True
+                self.core.mode = EdgeMode.MOVE
+                self.core.move_submode = MoveSubmode.POLICY
+                from edge.policy_manager import CompositionState
+                self.policy_manager.comp_state = CompositionState.GETUP
+                getup_pol = self.policy_manager.getup_policy or self.policy_manager.recovery_policy
+                if getup_pol:
+                    getup_pol.reset()
+                    if hasattr(getup_pol, "set_subpolicy"):
+                        getup_pol.set_subpolicy("getup")
+                    self.policy_manager.active_policy = getup_pol
+                    self.policy_manager.active_policy_name = getup_pol.name
+                self.control_mode = "policy"
+                log.info(
+                    "[SIM] Learned getup recovery initiated: OpenHorizon getup.onnx generating dynamic joint trajectory from (z=%.3fm).",
+                    current_z
+                )
+                return {
+                    "status": "recovered",
+                    "edge_mode": self.core.mode.name,
+                    "base_x": current_x,
+                    "base_y": current_y,
+                    "base_z": current_z,
+                    "gantry": False,
+                    "message": f"OpenHorizon getup.onnx active from z={current_z:.3f}m (no teleportation).",
+                }
+
+            # Fallback prototype kinematic recovery (for legacy tests without recovery policy loaded)
+            self.core.fall_latch_enabled = False
             if current_z >= 0.38 and not self.core.fault_fall:
                 cur_pos = [float(self.data.qpos[adr]) for adr in self.actuator_qposadr]
                 sim_t = float(self.data.time)
@@ -904,7 +997,6 @@ class SimBackend:
                 log.info("[SIM] Crouch recovery: official policy extending leg actuators from z=%.2fm.", current_z)
                 msg = f"Policy dynamic stand initiated from crouch height ({current_z:.2f}m)."
             else:
-                # Full ground recovery: restore upright base orientation and height at CURRENT (x, y) coordinates
                 self.data.qpos[0] = current_x
                 self.data.qpos[1] = current_y
                 self.data.qpos[2] = SETTLED_BASE_Z
@@ -913,7 +1005,6 @@ class SimBackend:
                 self.data.qvel[:] = 0.0
                 mujoco.mj_forward(self.model, self.data)
 
-                # Engage virtual gantry tether at current coordinates, arm official STAND policy
                 self.set_gantry(True)
                 cur_pos = [float(self.data.qpos[adr]) for adr in self.actuator_qposadr]
                 sim_t = float(self.data.time)
@@ -925,7 +1016,6 @@ class SimBackend:
                 self.manual_joint_overrides.clear()
                 msg = f"Robot restored upright at ({current_x:.2f}m, {current_y:.2f}m); official policy active with gantry support."
 
-            # Re-arm policy
             self.core.fall_latch_enabled = True
             log.info("[SIM] Getup recovery complete: base_z=%.3fm at (%.2f, %.2f), STAND armed under official policy.",
                      float(self.data.qpos[2]), current_x, current_y)

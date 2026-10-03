@@ -64,6 +64,11 @@ class RobotState:
     # Extensible metadata (environment friction, camera frames, alerts)
     custom: Dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def zeros(cls) -> "RobotState":
+        """Construct a default zeroed RobotState."""
+        return cls()
+
     @property
     def tilt_deg(self) -> float:
         """Angle between body +Z and gravity vertical in degrees."""

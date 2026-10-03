@@ -111,11 +111,24 @@ def main() -> int:
     if req_file.exists():
         log("Installing dependencies from requirements.txt (with pre-releases enabled)...")
         run_command([str(venv_pip), "install", "--pre", "-r", str(req_file)])
+
+        # macOS compatibility check: on macOS < 13.4, onnxruntime > 1.20.1 lacks std::to_chars in libc++
+        if sys.platform == "darwin":
+            try:
+                mac_ver_str = platform.mac_ver()[0]
+                mac_parts = [int(p) for p in mac_ver_str.split(".") if p.isdigit()]
+                if len(mac_parts) >= 2 and (mac_parts[0] < 13 or (mac_parts[0] == 13 and mac_parts[1] < 4)):
+                    log("Detected macOS < 13.4: ensuring compatible onnxruntime<=1.20.1 is installed...")
+                    run_command([str(venv_pip), "install", "onnxruntime<=1.20.1"])
+            except Exception as e:
+                log_warn(f"Could not check macOS version for onnxruntime pin: {e}")
     else:
         log_warn("requirements.txt not found. Skipping dependency installation.")
 
-    # Platform-specific compatibility links (POSIX mjpython alias)
-    if sys.platform != "win32":
+    # Platform-specific compatibility links (POSIX mjpython alias on Linux)
+    # Note: On macOS, mujoco installs a native Cocoa trampoline binary `mjpython`.
+    # On Linux, MuJoCo does not provide mjpython, so we create an alias to python.
+    if sys.platform.startswith("linux"):
         mjpython = venv_dir / "bin" / "mjpython"
         if not mjpython.exists():
             try:
@@ -174,7 +187,13 @@ def main() -> int:
     if not args.skip_tests:
         log("[5/5] Running test suite verification...")
         test_env = os.environ.copy()
-        test_env.setdefault("MUJOCO_GL", "egl" if sys.platform.startswith("linux") else "glfw")
+        if sys.platform == "darwin":
+            default_gl = "cgl"
+        elif sys.platform.startswith("linux"):
+            default_gl = "egl"
+        else:
+            default_gl = "osmesa"
+        test_env.setdefault("MUJOCO_GL", default_gl)
         res = subprocess.run([str(venv_python), "-m", "unittest", "discover", "-s", "tests", "-v"], env=test_env)
         if res.returncode == 0:
             log_success("All tests passed successfully!")

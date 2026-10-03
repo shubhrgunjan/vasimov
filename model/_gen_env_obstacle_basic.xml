@@ -164,6 +164,7 @@
             <inertial pos="0.0123887754708077 0.000861952115589091 0.0425189272866255" mass="0.394055609177456" fullinertia="0.00128726711862714 0.00173087070402671 0.00145145415000959 3.55175311514234E-07 0.000142554637413333 -3.99783179861009E-07" />
             <geom name="neck_pitch_link_collision" class="body_capsule" fromto="0.03 0 0 0.03 0 0.04" size="0.05" />
             <geom name="neck_pitch_link_visual" pos="0 0 0" quat="1.0 0.0 0.0 0.0" type="mesh" mesh="neck_pitch_link.STL" class="visual" />
+            <camera name="first_person_camera" mode="fixed" pos="0.04 0 0.05" xyaxes="0 -1 0 0 0 1" fovy="75.0" />
           </body>
         </body>
         <body name="right_shoulder_pitch_link" pos="-0.0262128253533167 -0.0964999999999998 0.261140483320038" quat="1.0 0.0 0.0 0.0">
@@ -222,6 +223,8 @@
         </body>
       </body>
       <site name="pelvis_site" pos="-0.05 0 0" quat="1 0 0 0" />
+      <camera name="chase_camera" mode="fixed" pos="-1.5 0 0.40" xyaxes="0 -1 0 0.15 0 0.988" fovy="65.0" />
+      <camera name="first_person_behind" mode="fixed" pos="-0.8 0 0.35" xyaxes="0 -1 0 0.15 0 0.988" fovy="70.0" />
       <camera name="front_camera" mode="track" fovy="60.0" quat="0.5 0.5 0.5 0.5" pos="2.5 0.0 0.7" />
       <camera name="side_camera" mode="track" fovy="45.0" quat="0.368 0.295 -0.552 -0.688" pos="-3.0 2.0 1.5" />
       <camera name="back_camera" mode="track" fovy="60.0" quat="0.533 0.465 -0.465 -0.533" pos="-4.0 0.0 1.2" />

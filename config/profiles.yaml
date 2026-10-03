@@ -1,0 +1,33 @@
+# ==============================================================================
+# Virtual Asimov 1 Runtime Policy Profiles
+# ==============================================================================
+# Defines canonical composition profiles for multi-policy arbitration and single
+# policy execution.
+
+profiles:
+  default:
+    name: "default"
+    description: "Default Asimov 1 profile: Official Menlo locomotion + OpenHorizon Recovery Suite"
+    locomotion: "official_locomotion"
+    safefall: "openhorizon_safefall"
+    getup: "openhorizon_getup"
+    recovery_suite: "openhorizon_recovery"
+    auto_compose: true
+
+  official_locomotion:
+    name: "official_locomotion"
+    description: "Official Menlo locomotion only (legacy fault-damp on fall; zero auto-recovery)"
+    locomotion: "official_locomotion"
+    safefall: null
+    getup: null
+    recovery_suite: null
+    auto_compose: false
+
+  openhorizon_recovery:
+    name: "openhorizon_recovery"
+    description: "OpenHorizon Recovery Suite (Safe-Fall + Get-Up) with Official Locomotion"
+    locomotion: "official_locomotion"
+    safefall: "openhorizon_safefall"
+    getup: "openhorizon_getup"
+    recovery_suite: "openhorizon_recovery"
+    auto_compose: true

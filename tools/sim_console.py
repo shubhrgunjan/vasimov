@@ -243,8 +243,7 @@ class SimConsole:
         if policy_name:
             self.backend.load_policy(policy_name)
         if locomotion_policy or balance_policy or recovery_policy:
-            from edge.policy_manager import ArbitrationMode
-            self.backend.policy_manager.mode = ArbitrationMode.AUTO_COMPOSE
+            self.backend.policy_manager.auto_compose = True
             if locomotion_policy:
                 self.backend.policy_manager.register_policy(
                     self.backend.policy_registry.instantiate(locomotion_policy),
@@ -256,10 +255,19 @@ class SimConsole:
                     category="balance"
                 )
             if recovery_policy:
-                self.backend.policy_manager.register_policy(
-                    self.backend.policy_registry.instantiate(recovery_policy),
-                    category="recovery"
-                )
+                if recovery_policy in ("openhorizon", "openhorizon_recovery", "getup_safefall"):
+                    self.backend.policy_manager.configure_multi_policy(
+                        locomotion=locomotion_policy or "official_locomotion",
+                        recovery="openhorizon_recovery",
+                        auto_compose=True,
+                    )
+                else:
+                    self.backend.policy_manager.register_policy(
+                        self.backend.policy_registry.instantiate(recovery_policy),
+                        category="recovery"
+                    )
+            self.core.recovery_mode_active = True
+            self.core.fall_latch_enabled = False
 
         # 3. Load initial environment preset if not flat
         if env_preset != "flat":
@@ -389,7 +397,7 @@ class SimConsole:
         self.set_camera(next_cam)
         return next_cam
 
-    def start_viewer(self) -> bool:
+    def start_viewer(self, timeout: float = 3.0) -> bool:
         """Launch MuJoCo passive viewer if requested and display is available."""
         if not self.use_viewer:
             return False
@@ -398,16 +406,51 @@ class SimConsole:
             log.info("[VIEWER] No DISPLAY found; running in headless mode.")
             return False
 
-        try:
-            import mujoco.viewer
-            self.viewer = mujoco.viewer.launch_passive(self.backend.model, self.backend.data)
-            log.info("[VIEWER] MuJoCo interactive passive viewer launched successfully.")
-            self.set_camera(self.active_camera)
-            return True
-        except Exception as e:
-            log.warning("[VIEWER] Could not launch viewer (%s); continuing in headless mode.", e)
-            self.viewer = None
+        deadline = time.time() + timeout
+        while True:
+            try:
+                import mujoco.viewer
+                self.viewer = mujoco.viewer.launch_passive(self.backend.model, self.backend.data)
+                log.info("[VIEWER] MuJoCo interactive passive viewer launched successfully.")
+                self.set_camera(self.active_camera)
+                return True
+            except Exception as e:
+                err_str = str(e).lower()
+                # On macOS Cocoa, previous window teardown is asynchronous; retry until UI thread releases viewer
+                if "another mujoco viewer is already open" in err_str and time.time() < deadline:
+                    time.sleep(0.08)
+                    continue
+                log.warning("[VIEWER] Could not launch viewer (%s); continuing in headless mode.", e)
+                if sys.platform == "darwin" and "mjpython" in err_str:
+                    log.info("[VIEWER] On macOS, launch via './run_sim.sh' or '.venv/bin/mjpython' for native Cocoa 3D GUI.")
+                self.viewer = None
+                return False
+
+    def restart_viewer(self, timeout: float = 3.0) -> bool:
+        """Safely close existing viewer, wait for native window teardown, and relaunch with updated model."""
+        if not self.use_viewer:
             return False
+
+        if self.viewer is not None:
+            old_viewer = self.viewer
+            self.viewer = None
+            try:
+                old_viewer.close()
+            except Exception:
+                pass
+            # Wait for previous viewer to finish closing on UI thread
+            deadline = time.time() + 1.5
+            while time.time() < deadline:
+                try:
+                    if not old_viewer.is_running():
+                        break
+                except Exception:
+                    break
+                time.sleep(0.05)
+            # Brief settling pause for Cocoa window cleanup on macOS
+            time.sleep(0.15)
+
+        return self.start_viewer(timeout=timeout)
 
 
     def _physics_loop(self) -> None:
@@ -713,8 +756,8 @@ class SimConsole:
             res = self.backend.safe_fall()
             self.log_command_pipeline(
                 user_input=line,
-                parsed_cmd="action = SAFE_FALL (emergency compliant descent)",
-                control_cmd="backend.safe_fall() -> DAMP compliance, Kp=0, Kd=2.0",
+                parsed_cmd="action = SAFE_FALL (OpenHorizon neural impact mitigation)",
+                control_cmd="backend.safe_fall() -> safefall.onnx active in MOVE/POLICY",
                 sim_result=f"mode = {res.get('edge_mode')}, gantry = {res.get('gantry')}\n    {res.get('message')}",
             )
 
@@ -722,8 +765,8 @@ class SimConsole:
             res = self.backend.getup()
             self.log_command_pipeline(
                 user_input=line,
-                parsed_cmd="action = GETUP (fault clearance & standing recovery)",
-                control_cmd="backend.getup() -> clear faults, base_z=0.61m, gantry ENGAGED, STAND armed",
+                parsed_cmd="action = GETUP (OpenHorizon neural ground recovery)",
+                control_cmd="backend.getup() -> getup.onnx dynamic pushup in MOVE/POLICY",
                 sim_result=f"mode = {res.get('edge_mode')}, base_z = {res.get('base_z'):.4f}m, gantry = {res.get('gantry')}\n    {res.get('message')}",
             )
 
@@ -1066,13 +1109,8 @@ class SimConsole:
                     preset_arg = " ".join(args[1:]).strip()
                     try:
                         res = self.backend.load_environment(preset_arg)
-                        if self.viewer is not None and self.use_viewer:
-                            try:
-                                self.viewer.close()
-                            except Exception:
-                                pass
-                            self.viewer = None
-                            self.start_viewer()
+                        if self.use_viewer:
+                            self.restart_viewer()
                         print(f"Successfully loaded environment '{preset_arg}':")
                         print(f"  Friction: mu={res['ground_friction']}, Mass scale: {res['mass_scale']}, Obstacles: {res['obstacle_count']}")
                     except Exception as e:
@@ -1081,13 +1119,8 @@ class SimConsole:
                     print("Usage: env load <preset_or_file_path>")
             elif args[0] == "reset":
                 self.backend.load_environment(self.backend.env_manager.current_preset)
-                if self.viewer is not None and self.use_viewer:
-                    try:
-                        self.viewer.close()
-                    except Exception:
-                        pass
-                    self.viewer = None
-                    self.start_viewer()
+                if self.use_viewer:
+                    self.restart_viewer()
                 print(f"Reset environment to nominal: {self.backend.env_manager.current_preset}")
 
 
@@ -1284,10 +1317,10 @@ class SimConsole:
             print(f"\n{C_YELLOW}INPUT: KEY=P ({status}){C_RESET}")
         elif key in ("f", "fall", "safefall"):
             res = self.backend.safe_fall()
-            print(f"\n{C_YELLOW}INPUT: KEY=F (SAFE FALL) | {res.get('message')}{C_RESET}")
+            print(f"\n{C_YELLOW}INPUT: KEY=F (OPENHORIZON SAFE-FALL) | {res.get('message')}{C_RESET}")
         elif key in ("g", "getup", "recover"):
             res = self.backend.getup()
-            print(f"\n{C_GREEN}INPUT: KEY=G (GETUP RECOVERY) | {res.get('message')}{C_RESET}")
+            print(f"\n{C_GREEN}INPUT: KEY=G (OPENHORIZON GET-UP RECOVERY) | {res.get('message')}{C_RESET}")
         elif key in ("h", "hello", "wave"):
             self.backend.play_emote("hello")
             print(f"\n{C_MAGENTA}INPUT: KEY=H (HELLO EMOTE) | Playing wave greeting (3.0s){C_RESET}")
@@ -1475,8 +1508,8 @@ class SimConsole:
                         f"{C_CYAN}║{C_RESET}   {C_BOLD}[Q] / [E]{C_RESET} : Rotate CCW / CW (±0.10 rad/s) {C_BOLD}[R]{C_RESET}     : Arm STAND Pose\n"
                         f"{C_CYAN}║{C_RESET}   {C_BOLD}[1] - [4]{C_RESET} : Push Disturbances (40N, 80N, 150N, 250N)\n"
                         f"{C_CYAN}║{C_RESET}   {C_BOLD}[O]{C_RESET}       : Spawn / Drop Dynamic Physics Obstacle in front of robot\n"
-                        f"{C_CYAN}║{C_RESET}   {C_BOLD}[F]{C_RESET}       : Controlled Safe Fall (Compliant ground descent)\n"
-                        f"{C_CYAN}║{C_RESET}   {C_BOLD}[G]{C_RESET}       : Real Policy Getup Recovery (Preserves position & balances)\n"
+                        f"{C_CYAN}║{C_RESET}   {C_BOLD}[F]{C_RESET}       : OpenHorizon Safe-Fall (safefall.onnx active impact mitigation)\n"
+                        f"{C_CYAN}║{C_RESET}   {C_BOLD}[G]{C_RESET}       : OpenHorizon Get-Up (getup.onnx learned dynamic pushup)\n"
                         f"{C_CYAN}║{C_RESET}   {C_BOLD}[L]{C_RESET}       : Toggle Fall Latch (Allow policy to run through falls)\n"
                         f"{C_CYAN}║{C_RESET}   {C_BOLD}[V]{C_RESET}       : Cycle Camera (Chase ➔ FPV Behind ➔ FPV Head ➔ Free Orbit)\n"
                         f"{C_CYAN}║{C_RESET}   {C_BOLD}[P]{C_RESET}       : Pause / Resume Simulation      {C_BOLD}[ESC / M]{C_RESET} : Exit to Main Console\n"
@@ -1606,13 +1639,13 @@ def main() -> int:
     parser.add_argument("--drive", "--game", "--teleop", dest="drive_mode", action="store_true", help="Launch directly into live keyboard game teleoperation mode (WASD keys)")
 
     # Pluggable Policy CLI extensions
-    parser.add_argument("--policy", type=str, default=None, help="Policy name or directory to load (e.g. official_locomotion, getup_safefall, custom/getup)")
+    parser.add_argument("--policy", type=str, default=None, help="Policy name or profile to load: 'official_locomotion' (Menlo locomotion only), 'openhorizon_recovery' (suite), 'openhorizon_safefall', 'openhorizon_getup'. (Default: Menlo locomotion + OpenHorizon recovery suite)")
     parser.add_argument("--list-policies", action="store_true", help="List all discovered policies in catalog and exit")
     parser.add_argument("--validate", action="store_true", help="Validate specified policy contract, weights, and joint kinematics and exit")
     parser.add_argument("--debug-policy", action="store_true", help="Enable verbose debug telemetry for policy observations and actions")
-    parser.add_argument("--locomotion", type=str, default=None, help="Specify locomotion policy for multi-policy composition")
+    parser.add_argument("--locomotion", type=str, default=None, help="Specify locomotion policy for multi-policy composition (default: official_locomotion)")
     parser.add_argument("--balance", type=str, default=None, help="Specify balance policy for multi-policy composition")
-    parser.add_argument("--recovery", type=str, default=None, help="Specify recovery policy for multi-policy composition")
+    parser.add_argument("--recovery", type=str, default=None, help="Specify recovery policy or suite ('openhorizon', 'openhorizon_safefall', 'openhorizon_getup')")
     parser.add_argument(
         "--camera",
         type=str,
@@ -1620,6 +1653,18 @@ def main() -> int:
         help="Initial 3D viewer camera view: 'chase' (behind robot, follows & turns), 'fpv_behind', 'fpv' (head eye-level), 'front', 'side', 'free', etc. (default: chase)",
     )
     args = parser.parse_args()
+
+    # macOS Cocoa GUI Support: MuJoCo passive viewer requires running under `mjpython`
+    if (
+        sys.platform == "darwin"
+        and "MJPYTHON_BIN" not in os.environ
+        and not args.no_viewer
+        and not args.list_policies
+        and not args.validate
+    ):
+        mjpy = Path(sys.executable).parent / "mjpython"
+        if mjpy.exists() and os.access(mjpy, os.X_OK):
+            os.execv(str(mjpy), [str(mjpy)] + sys.argv)
 
     # If --list-policies requested, discover and print catalog, then exit
     if args.list_policies:
@@ -1649,6 +1694,24 @@ def main() -> int:
             print(f"\n{C_RED}✗ POLICY VALIDATION FAILED — Cannot run in simulation.{C_RESET}\n")
             return 1
 
+    # CLI Default Arbitration:
+    # If user ran without --policy, or specified openhorizon recovery:
+    # Default is Official Menlo locomotion + OpenHorizon Recovery Suite (Safe-Fall + Get-Up)
+    # If user specified --policy official_locomotion: Menlo-only mode (auto_compose=False).
+    if args.policy in ("official_locomotion", "official") and args.recovery is None:
+        target_policy = "official_locomotion"
+        target_loco = None
+        target_rec = None
+    elif args.policy in ("openhorizon_safefall", "openhorizon_getup", "safefall", "getup") and args.recovery is None:
+        target_policy = args.policy
+        target_loco = None
+        target_rec = None
+    else:
+        # Default profile: Official Menlo locomotion + OpenHorizon Recovery Suite
+        target_policy = None
+        target_loco = args.locomotion or (args.policy if args.policy and args.policy not in ("openhorizon_recovery", "getup_safefall") else "official_locomotion")
+        target_rec = args.recovery or "openhorizon_recovery"
+
     console = SimConsole(
         env_preset=args.env,
         realtime=not args.fast,
@@ -1659,10 +1722,10 @@ def main() -> int:
         web_host=args.web_host,
         web_port=args.web_port,
         ws_port=args.ws_port,
-        policy_name=args.policy,
-        locomotion_policy=args.locomotion,
+        policy_name=target_policy,
+        locomotion_policy=target_loco,
         balance_policy=args.balance,
-        recovery_policy=args.recovery,
+        recovery_policy=target_rec,
         debug_policy=args.debug_policy,
         camera=args.camera,
     )

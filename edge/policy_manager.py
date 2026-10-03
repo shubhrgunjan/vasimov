@@ -57,6 +57,8 @@ class PolicyManager:
 
         # Multi-policy slots
         self.locomotion_policy: Optional[BasePolicy] = None
+        self.safefall_policy: Optional[BasePolicy] = None
+        self.getup_policy: Optional[BasePolicy] = None
         self.recovery_policy: Optional[BasePolicy] = None
         self.balance_policy: Optional[BasePolicy] = None
 
@@ -76,13 +78,39 @@ class PolicyManager:
         except Exception as e:
             log.warning("[POLICY MANAGER] Could not load default policy '%s': %s", default_policy_name, e)
 
+    @property
+    def mode(self) -> ArbitrationMode:
+        """Arbitration mode compatibility property."""
+        return ArbitrationMode.AUTO_COMPOSE if self.auto_compose else ArbitrationMode.SINGLE
+
+    @mode.setter
+    def mode(self, val: Any) -> None:
+        """Allow setting mode via ArbitrationMode or boolean."""
+        if isinstance(val, ArbitrationMode):
+            self.auto_compose = (val == ArbitrationMode.AUTO_COMPOSE)
+        elif isinstance(val, str):
+            self.auto_compose = (val.lower() in ("auto_compose", "compose", "multi"))
+        else:
+            self.auto_compose = bool(val)
+
     def load_policy(self, name_or_path: str, as_active: bool = True) -> BasePolicy:
         """Load and instantiate a policy into the manager."""
         policy = self.registry.instantiate(name_or_path, safety=self.safety)
         self._policies[policy.name] = policy
 
+        pname = policy.name.lower()
         if policy.category == "locomotion":
             self.locomotion_policy = policy
+        elif pname in ("getup_safefall", "openhorizon_recovery"):
+            self.recovery_policy = policy
+        elif pname in ("safefall", "openhorizon_safefall") or (hasattr(policy.manifest.runtime, "model_path") and "safefall" in str(policy.manifest.runtime.model_path) and "getup" not in pname):
+            self.safefall_policy = policy
+            if self.recovery_policy is None:
+                self.recovery_policy = policy
+        elif pname in ("getup", "openhorizon_getup"):
+            self.getup_policy = policy
+            if self.recovery_policy is None:
+                self.recovery_policy = policy
         elif policy.category == "recovery":
             self.recovery_policy = policy
         elif policy.category == "balance":
@@ -102,8 +130,19 @@ class PolicyManager:
         """Register an instantiated policy instance."""
         self._policies[policy.name] = policy
         cat = category or policy.category
+        pname = policy.name.lower()
         if cat == "locomotion":
             self.locomotion_policy = policy
+        elif pname in ("getup_safefall", "openhorizon_recovery"):
+            self.recovery_policy = policy
+        elif pname in ("safefall", "openhorizon_safefall"):
+            self.safefall_policy = policy
+            if self.recovery_policy is None:
+                self.recovery_policy = policy
+        elif pname in ("getup", "openhorizon_getup"):
+            self.getup_policy = policy
+            if self.recovery_policy is None:
+                self.recovery_policy = policy
         elif cat == "recovery":
             self.recovery_policy = policy
         elif cat == "balance":
@@ -125,14 +164,32 @@ class PolicyManager:
         self,
         locomotion: Optional[str] = None,
         recovery: Optional[str] = None,
+        safefall: Optional[str] = None,
+        getup: Optional[str] = None,
         balance: Optional[str] = None,
         auto_compose: bool = False,
     ) -> None:
         """Configure policies for multi-policy composition and arbitration."""
         if locomotion:
             self.locomotion_policy = self.load_policy(locomotion, as_active=False)
+
+        # Handle recovery suite or individual recovery policies
         if recovery:
-            self.recovery_policy = self.load_policy(recovery, as_active=False)
+            if recovery in ("openhorizon_recovery", "getup_safefall", "openhorizon"):
+                self.safefall_policy = self.load_policy("openhorizon_safefall", as_active=False)
+                self.getup_policy = self.load_policy("openhorizon_getup", as_active=False)
+                self.recovery_policy = self.load_policy("openhorizon_recovery", as_active=False)
+            elif "safefall" in recovery:
+                self.safefall_policy = self.load_policy(recovery, as_active=False)
+            elif "getup" in recovery:
+                self.getup_policy = self.load_policy(recovery, as_active=False)
+            else:
+                self.recovery_policy = self.load_policy(recovery, as_active=False)
+
+        if safefall:
+            self.safefall_policy = self.load_policy(safefall, as_active=False)
+        if getup:
+            self.getup_policy = self.load_policy(getup, as_active=False)
         if balance:
             self.balance_policy = self.load_policy(balance, as_active=False)
 
@@ -154,57 +211,92 @@ class PolicyManager:
 
     def _arbitrate_composition(self, state: RobotState) -> BasePolicy:
         """
-        State machine arbitrating policy ownership between locomotion and recovery:
-        LOCOMOTION -> (tilt > 30 deg or w > 2.0 rad/s) -> SAFEFALL -> (settled) -> GETUP -> (upright 1.5s) -> LOCOMOTION
+        Deterministic state machine arbitrating policy ownership:
+        NORMAL (Official locomotion) -> (tilt > 30° or |w| > 2.0 rad/s)
+            -> SAFE_FALL (OpenHorizon Safe-Fall, safefall.onnx) -> (settled on ground)
+            -> GET_UP (OpenHorizon Get-Up, getup.onnx) -> (stable standing upright)
+            -> NORMAL (Official locomotion)
         """
-        if not self.auto_compose or not self.recovery_policy or not self.locomotion_policy:
+        safefall_pol = self.safefall_policy or self.recovery_policy
+        getup_pol = self.getup_policy or self.recovery_policy
+
+        if not self.auto_compose or not (safefall_pol or getup_pol) or not self.locomotion_policy:
             return self.active_policy or self.locomotion_policy
 
-        w_sq = float(np.dot(state.base_ang_vel_world, state.base_ang_vel_world))
+        w_sq = float(np.dot(state.base_ang_vel_body, state.base_ang_vel_body))
         tilt = state.tilt_deg
 
         if self.comp_state == CompositionState.LOCOMOTION:
-            # Fall trigger: tilt > 30 deg or high angular rate
+            # Fall trigger: tilt > 30 deg or high angular rate > 2.0 rad/s
             if (tilt > 30.0 or w_sq > 4.0) and not state.gantry_active:
-                log.info("[ARBITER] Fall detected (tilt=%.1f deg, |w|=%.2f rad/s). Handover: LOCOMOTION -> SAFEFALL", tilt, math.sqrt(w_sq))
+                log.info(
+                    "[ARBITER] Fall detected (tilt=%.1f deg, |w|=%.2f rad/s). Handover: LOCOMOTION -> SAFEFALL",
+                    tilt, math.sqrt(w_sq)
+                )
                 self.comp_state = CompositionState.SAFEFALL
-                self.recovery_policy.reset()
+                if safefall_pol:
+                    safefall_pol.reset()
+                    if hasattr(safefall_pol, "set_subpolicy"):
+                        safefall_pol.set_subpolicy("safefall")
+                    if hasattr(safefall_pol.adapter, "fall_triggered"):
+                        safefall_pol.adapter.fall_triggered = True
                 self._settle_timer_s = 0.0
-                return self.recovery_policy
+                self.active_policy = safefall_pol
+                self.active_policy_name = safefall_pol.name if safefall_pol else "safefall"
+                return safefall_pol or self.locomotion_policy
             return self.locomotion_policy
 
         elif self.comp_state == CompositionState.SAFEFALL:
-            # Settled check: base nearly still
+            # Settled check: robot is low and nearly still on ground
             lin_speed = float(np.linalg.norm(state.base_lin_vel_world))
-            ang_speed = float(np.linalg.norm(state.base_ang_vel_world))
-            if lin_speed < 0.20 and ang_speed < 0.60:
+            ang_speed = float(np.linalg.norm(state.base_ang_vel_body))
+            is_grounded = (state.pelvis_pos[2] < 0.35) or (tilt > 50.0)
+            if is_grounded and lin_speed < 0.25 and ang_speed < 0.60:
                 self._settle_timer_s += state.dt
             else:
                 self._settle_timer_s = 0.0
 
-            if self._settle_timer_s >= 0.30:
-                log.info("[ARBITER] Robot settled on ground. Handover: SAFEFALL -> GETUP")
+            if self._settle_timer_s >= 0.25:
+                log.info(
+                    "[ARBITER] Robot settled on ground (tilt=%.1f deg, z=%.2fm). Handover: SAFEFALL -> GETUP",
+                    tilt, state.pelvis_pos[2]
+                )
                 self.comp_state = CompositionState.GETUP
-                self.recovery_policy.reset()
+                if getup_pol:
+                    getup_pol.reset()
+                    if hasattr(getup_pol, "set_subpolicy"):
+                        getup_pol.set_subpolicy("getup")
                 self._stood_timer_s = 0.0
+                self.active_policy = getup_pol
+                self.active_policy_name = getup_pol.name if getup_pol else "getup"
+                return getup_pol or safefall_pol or self.locomotion_policy
 
-            return self.recovery_policy
+            self.active_policy = safefall_pol
+            self.active_policy_name = safefall_pol.name if safefall_pol else "safefall"
+            return safefall_pol or self.locomotion_policy
 
         elif self.comp_state == CompositionState.GETUP:
-            # Stood check: upright and pelvis height > 0.55m
+            # Stood check: upright (gz < -0.85) and pelvis height > 0.55m
             is_upright = (state.projected_gravity[2] < -0.85) and (state.pelvis_pos[2] > 0.55)
             if is_upright:
                 self._stood_timer_s += state.dt
             else:
                 self._stood_timer_s = 0.0
 
-            if self._stood_timer_s >= 1.50:
-                log.info("[ARBITER] Robot recovered standing balance. Handover: GETUP -> LOCOMOTION")
+            if self._stood_timer_s >= 0.80:
+                log.info(
+                    "[ARBITER] Robot recovered standing balance (z=%.2fm, gz=%.2f). Handover: GETUP -> LOCOMOTION",
+                    state.pelvis_pos[2], state.projected_gravity[2]
+                )
                 self.comp_state = CompositionState.LOCOMOTION
                 self.locomotion_policy.reset()
+                self.active_policy = self.locomotion_policy
+                self.active_policy_name = self.locomotion_policy.name
                 return self.locomotion_policy
 
-            return self.recovery_policy
+            self.active_policy = getup_pol
+            self.active_policy_name = getup_pol.name if getup_pol else "getup"
+            return getup_pol or self.locomotion_policy
 
         return self.active_policy or self.locomotion_policy
 

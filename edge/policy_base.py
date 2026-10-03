@@ -7,7 +7,8 @@ Combines Manifest, Runtime, Adapter, and Safety enforcement into a cohesive cont
 from __future__ import annotations
 import logging
 import time
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from edge.policy_contract import PolicyManifest
@@ -35,11 +36,24 @@ class BasePolicy:
         self.category = manifest.category
 
         # Runtime
+        mpath = manifest.resolve_model_path()
         if runtime is not None:
             self.runtime = runtime
         else:
-            mpath = manifest.resolve_model_path()
             self.runtime = ONNXPolicyRuntime(model_path=mpath)
+
+        # Dual-model support for recovery suites (safefall.onnx + getup.onnx)
+        self.safefall_runtime: Optional[ONNXPolicyRuntime] = None
+        self.active_runtime: BasePolicyRuntime = self.runtime
+        if self.manifest.runtime.options and "safefall_model_path" in self.manifest.runtime.options:
+            sf_rel = self.manifest.runtime.options["safefall_model_path"]
+            sf_path = (self.manifest.base_dir / sf_rel).resolve() if self.manifest.base_dir else Path(sf_rel).resolve()
+            if sf_path.exists():
+                try:
+                    self.safefall_runtime = ONNXPolicyRuntime(model_path=sf_path)
+                    log.info("[POLICY] Dual runtime initialized for '%s': safefall=%s, getup=%s", self.name, sf_path.name, mpath.name)
+                except Exception as e:
+                    log.warning("[POLICY] Could not load safefall runtime from %s: %s", sf_path, e)
 
         # Adapter
         if adapter is not None:
@@ -83,6 +97,13 @@ class BasePolicy:
     def slot45_names(self) -> List[str]:
         return getattr(self.adapter, "slot45_names", [])
 
+    def set_subpolicy(self, name: str) -> None:
+        """Switch active model between safefall and getup within composite recovery policy."""
+        if name.lower() in ("safefall", "safe_fall") and self.safefall_runtime is not None:
+            self.active_runtime = self.safefall_runtime
+        else:
+            self.active_runtime = self.runtime
+
     def reset(self) -> None:
         """Reset adapter history, runtime state, and telemetry counters."""
         self.adapter.reset()
@@ -107,7 +128,7 @@ class BasePolicy:
         self.current_observation = obs
 
         # 2. Inference
-        outputs = self.runtime.run({"obs": obs})
+        outputs = self.active_runtime.run({"obs": obs})
         raw_act = outputs.get("actions")
         if raw_act is None:
             raw_act = next(iter(outputs.values()))

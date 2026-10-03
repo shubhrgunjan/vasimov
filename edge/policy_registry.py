@@ -61,6 +61,17 @@ class PolicyRegistry:
                 except Exception as e:
                     log.debug("[REGISTRY] Could not parse json spec at %s: %s", jpath, e)
 
+        # Standard canonical aliases for OpenHorizon Recovery and Official locomotion
+        aliases = {
+            "openhorizon_safefall": "safefall",
+            "openhorizon_getup": "getup",
+            "openhorizon_recovery": "getup_safefall",
+            "official": "official_locomotion",
+        }
+        for alias, target in aliases.items():
+            if target in self._manifests and alias not in self._manifests:
+                self._manifests[alias] = self._manifests[target]
+
     discover = discover_policies
 
     def register_manifest(self, manifest: PolicyManifest) -> None:
@@ -71,6 +82,19 @@ class PolicyRegistry:
         """Retrieve manifest by registered name or direct directory/file path."""
         if name_or_path in self._manifests:
             return self._manifests[name_or_path]
+
+        alias_map = {
+            "openhorizon_safefall": "safefall",
+            "openhorizon_getup": "getup",
+            "openhorizon_recovery": "getup_safefall",
+            "safefall": "openhorizon_safefall",
+            "getup": "openhorizon_getup",
+            "getup_safefall": "openhorizon_recovery",
+            "official": "official_locomotion",
+        }
+        target = alias_map.get(name_or_path)
+        if target and target in self._manifests:
+            return self._manifests[target]
 
         # Check if direct file/dir path provided
         p = Path(name_or_path).resolve()
@@ -87,6 +111,39 @@ class PolicyRegistry:
         raise KeyError(
             f"Policy '{name_or_path}' not found in registry. Available policies: {list(self._manifests.keys())}"
         )
+
+    def get_profile(self, name: str = "default") -> Dict[str, Any]:
+        """Load composition profile from config/profiles.yaml or fallback to defaults."""
+        profiles_path = self.root_dir / "config" / "profiles.yaml"
+        if profiles_path.exists():
+            try:
+                with open(profiles_path, "r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f)
+                profs = data.get("profiles", {})
+                if name in profs:
+                    return dict(profs[name])
+            except Exception as e:
+                log.warning("[REGISTRY] Failed to read profiles from %s: %s", profiles_path, e)
+
+        # Built-in fallback profiles
+        if name == "official_locomotion":
+            return {
+                "name": "official_locomotion",
+                "description": "Official Menlo Locomotion only (no automatic recovery)",
+                "locomotion": "official_locomotion",
+                "safefall": None,
+                "getup": None,
+                "auto_compose": False,
+            }
+        return {
+            "name": "default",
+            "description": "Default Asimov 1 profile: Official Menlo Locomotion + OpenHorizon Recovery Suite",
+            "locomotion": "official_locomotion",
+            "safefall": "openhorizon_safefall",
+            "getup": "openhorizon_getup",
+            "recovery_suite": "openhorizon_recovery",
+            "auto_compose": True,
+        }
 
     def list_policies(self) -> List[Dict[str, Any]]:
         """Return structured summary list of all available policies."""
@@ -111,17 +168,45 @@ class PolicyRegistry:
             "\n╔══════════════════════════════════════════════════════════════════════╗",
             "║                 VASIMOV AVAILABLE ROBOT POLICIES                     ║",
             "╚══════════════════════════════════════════════════════════════════════╝",
+            "",
+            "  ● \033[1;36mofficial_locomotion\033[0m (v1.0)",
+            "    Category   : LOCOMOTION",
+            "    Type       : Neural Locomotion Controller (Menlo Research)",
+            "    Runtime    : ONNX (policy.onnx)",
+            "    Input Dim  : 78 float32",
+            "    Output Dim : 23 float32",
+            "    Frequency  : 50.0 Hz (decimation=4)",
+            "    Summary    : Official Menlo Asimov 1 omnidirectional walk & stand controller",
+            "",
+            "  ● \033[1;36mopenhorizon_safefall\033[0m (v1.0) [alias: safefall]",
+            "    Category   : RECOVERY (Safe-Fall)",
+            "    Type       : Neural Impact Mitigation Policy (OpenHorizon Labs)",
+            "    Runtime    : ONNX (safefall.onnx)",
+            "    Input Dim  : 375 float32 (history=5)",
+            "    Output Dim : 23 float32",
+            "    Frequency  : 50.0 Hz (decimation=4)",
+            "    Trigger    : Tilt > 30° or angular rate > 2.0 rad/s",
+            "    Summary    : Active arm tuck, knee flexion, and torso shaping to minimize impact impulse",
+            "",
+            "  ● \033[1;36mopenhorizon_getup\033[0m (v1.0) [alias: getup]",
+            "    Category   : RECOVERY (Get-Up)",
+            "    Type       : Neural Ground Recovery Policy (OpenHorizon Labs)",
+            "    Runtime    : ONNX (getup.onnx)",
+            "    Input Dim  : 375 float32 (history=5)",
+            "    Output Dim : 23 float32",
+            "    Frequency  : 50.0 Hz (decimation=4)",
+            "    Trigger    : Settled on ground (z < 0.35m, low velocity)",
+            "    Summary    : Dynamic ground pushup and self-righting from prone/supine to upright standing",
+            "",
+            "  ● \033[1;32mopenhorizon_recovery\033[0m (v1.0) [alias: getup_safefall]",
+            "    Category   : RECOVERY SUITE (Suite Profile)",
+            "    Type       : OpenHorizon Dual-Policy System",
+            "    Architecture:",
+            "      ├── Safe-Fall → safefall.onnx (impact mitigation on disturbance)",
+            "      └── Get-Up    → getup.onnx    (ground recovery to stable standing)",
+            "    Handover   : walking → push → safe-fall → fallen → get-up → standing → walking",
+            "\n" + "─" * 72,
         ]
-        for name, m in sorted(self._manifests.items()):
-            lines.append(f"\n  ● \033[1;36m{name}\033[0m (v{m.version})")
-            lines.append(f"    Category   : {m.category.upper()}")
-            lines.append(f"    Runtime    : {m.runtime.type.upper()} ({m.runtime.model_path})")
-            lines.append(f"    Input Dim  : {m.observation.dim} float32 (history={m.observation.history_length})")
-            lines.append(f"    Output Dim : {m.action.dim} float32 ({m.action.type})")
-            lines.append(f"    Frequency  : {m.control.frequency_hz:.1f} Hz (decimation={m.control.decimation})")
-            if m.description:
-                lines.append(f"    Summary    : {m.description}")
-        lines.append("\n" + "─" * 72)
         return "\n".join(lines)
 
     def validate_policy(self, name_or_path: str, model_context: Any = None) -> Tuple[bool, List[str]]:

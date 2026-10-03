@@ -203,9 +203,8 @@ class GetupSafefallAdapter(BasePolicyAdapter):
 
     def _get_term_vector(self, name: str, state: RobotState) -> np.ndarray:
         if name == "base_ang_vel":
-            # IMU gyro, base frame
-            R = state.pelvis_xmat
-            return (R.T @ state.base_ang_vel_world).astype(np.float32)
+            # IMU gyro, base frame (direct body angular velocity)
+            return state.base_ang_vel_body.astype(np.float32)
 
         elif name == "projected_gravity":
             # unit gravity in pelvis frame
@@ -236,7 +235,7 @@ class GetupSafefallAdapter(BasePolicyAdapter):
         # Check fall trigger if defined for safe-fall
         if self.manifest.fall_trigger is not None and not self.fall_triggered:
             tilt = state.tilt_deg
-            w_sq = float(np.dot(state.base_ang_vel_world, state.base_ang_vel_world))
+            w_sq = float(np.dot(state.base_ang_vel_body, state.base_ang_vel_body))
             if tilt > self.tilt_trigger_deg or w_sq > (self.ang_vel_trigger ** 2):
                 self.fall_triggered = True
                 log.info(

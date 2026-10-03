@@ -153,6 +153,7 @@ class EdgeCore:
         self.fault_overtemp: bool = False
         self.fault_can: bool = False
         self.fall_latch_enabled: bool = True  # When False, direct policy runs without forcing FAULT_DAMP
+        self.recovery_mode_active: bool = False  # When True (OpenHorizon recovery active), tilt does NOT trip FAULT_DAMP
         self.error_flags: int = 0
         self.temperatures: List[float] = [25.0] * 25  # PLACEHOLDER 25.0 C
 
@@ -324,7 +325,7 @@ class EdgeCore:
             gz = float(imu_gravity[2])
             if gz > FALL_GRAVITY_Z_THRESHOLD:  # gz > -0.5 (tilt > 60 deg)
                 self.fault_fall = True
-                if self.fall_latch_enabled:
+                if self.fall_latch_enabled and not self.recovery_mode_active:
                     if not self.fault_latched:
                         log.error(
                             "[SAFETY FAULT] Fall detected: projected gravity z=%.2f > %.2f (tilt > 60 deg). "
@@ -335,10 +336,10 @@ class EdgeCore:
                         self.mode = EdgeMode.FAULT_DAMP
                         self.move_submode = MoveSubmode.NONE
                 else:
-                    log.debug("[POLICY] Tilt detected (gz=%.2f), fall_latch_enabled=False: continuing policy execution.", gz)
+                    log.debug("[POLICY] Tilt detected (gz=%.2f), fall latch suppressed for recovery: continuing policy execution.", gz)
                 self._recalculate_error_flags()
             else:
-                if not self.fall_latch_enabled and self.fault_fall:
+                if (not self.fall_latch_enabled or self.recovery_mode_active) and self.fault_fall:
                     self.fault_fall = False
                     self._recalculate_error_flags()
 

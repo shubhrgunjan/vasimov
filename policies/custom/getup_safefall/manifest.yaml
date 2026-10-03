@@ -128,7 +128,7 @@ pd_gains:
     joints: [".*_hip_pitch_joint"]
     kp: 150.0
     kd: 5.0
-    effort_limit: 40.0
+    effort_limit: 45.0
   waist:
     joints: ["waist_yaw_joint"]
     kp: 65.0
@@ -138,7 +138,7 @@ pd_gains:
     joints: [".*_hip_roll_joint"]
     kp: 150.0
     kd: 5.0
-    effort_limit: 30.0
+    effort_limit: 45.0
   shoulder_pitch:
     joints: [".*_shoulder_pitch_joint"]
     kp: 57.0
@@ -148,7 +148,7 @@ pd_gains:
     joints: [".*_hip_yaw_joint"]
     kp: 150.0
     kd: 5.0
-    effort_limit: 20.0
+    effort_limit: 28.0
   shoulder_yaw:
     joints: [".*_shoulder_yaw_joint"]
     kp: 96.0
@@ -158,7 +158,7 @@ pd_gains:
     joints: [".*_knee_joint"]
     kp: 150.0
     kd: 5.0
-    effort_limit: 25.0
+    effort_limit: 45.0
   shoulder_roll:
     joints: [".*_shoulder_roll_joint"]
     kp: 86.0

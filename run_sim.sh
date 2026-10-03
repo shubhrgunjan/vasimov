@@ -7,8 +7,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Select python virtualenv
-if [ -f "$SCRIPT_DIR/.venv/bin/python3" ]; then
+# Select python virtualenv (on macOS prefer mjpython for interactive Cocoa 3D GUI)
+if [ "$(uname -s)" = "Darwin" ] && [ -x "$SCRIPT_DIR/.venv/bin/mjpython" ]; then
+    PYTHON_BIN="$SCRIPT_DIR/.venv/bin/mjpython"
+elif [ -f "$SCRIPT_DIR/.venv/bin/python3" ]; then
     PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python3"
 elif command -v python3 &>/dev/null; then
     PYTHON_BIN="python3"

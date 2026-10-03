@@ -564,7 +564,7 @@ class WebGateway:
                 self.send_error(404, f"POST endpoint '{path}' not found")
 
         try:
-            self.http_server = http.server.HTTPServer((self.host, self.http_port), GatewayRequestHandler)
+            self.http_server = http.server.ThreadingHTTPServer((self.host, self.http_port), GatewayRequestHandler)
             self._http_thread = threading.Thread(
                 target=self.http_server.serve_forever,
                 daemon=True,
