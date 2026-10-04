@@ -34,6 +34,12 @@ from web.server.camera_streamer import CameraStreamer
 from web.server.control_handler import ControlHandler
 from web.server.replay_manager import ReplayManager
 from web.server.webrtc_gateway import WebRTCGateway
+from edge.core import EdgeMode
+from web.server.binary_protocol import (
+    pack_state_packet, unpack_command_packet,
+    STATE_PACKET_SIZE, COMMAND_PACKET_SIZE, STATE_MAGIC, COMMAND_MAGIC,
+    CommandType, StateFlags, RobotMode, PolicyId, RecoveryState
+)
 
 log = logging.getLogger("vasimov.web.gateway")
 
@@ -74,7 +80,10 @@ class WebGateway:
         # State cache
         self.latest_frame: Optional[Dict[str, Any]] = None
         self.latest_json: str = "{}"
+        self.latest_binary_packet: Optional[bytes] = None
         self.broadcast_sequence: int = 0
+        self.binary_sequence: int = 0
+        self.binary_ws_clients: Set[Any] = set()
 
         # Threads and servers
         self.http_server: Optional[http.server.HTTPServer] = None
@@ -159,43 +168,145 @@ class WebGateway:
 
         log.info("[GATEWAY] Stopped.")
 
+    # ── Binary State Protocol Methods ────────────────────────────────────────
+    def build_binary_state_packet(self) -> bytes:
+        """Pack the latest authoritative MuJoCo state into fixed 288-byte VAS1 packet."""
+        self.binary_sequence += 1
+        backend = self.backend
+        core = self.core
+        d = backend.data
+
+        with backend._lock:
+            sim_time = float(d.time)
+            qpos = d.qpos
+            qvel = d.qvel
+
+            robot_mode = int(core.mode.value) if hasattr(core.mode, "value") else 0
+            policy_id = 1 if core.mode == EdgeMode.MOVE else 0
+
+            recovery_state = 0
+            if core.fault_latched:
+                recovery_state = 1
+            elif core.mode in (EdgeMode.DAMP, EdgeMode.FAULT_DAMP):
+                recovery_state = 2
+
+            safety_state = int(core.error_flags) if hasattr(core, "error_flags") else 0
+
+            flags = 0
+            if core.fault_latched:
+                flags |= StateFlags.FAULT_LATCHED
+            if backend.gantry_active:
+                flags |= StateFlags.GANTRY_ACTIVE
+
+            raw_contacts = backend.get_contacts()
+            if raw_contacts.get("left_foot", {}).get("contact", False):
+                flags |= StateFlags.CONTACT_LEFT
+            if raw_contacts.get("right_foot", {}).get("contact", False):
+                flags |= StateFlags.CONTACT_RIGHT
+
+            base_pos = [float(qpos[0]), float(qpos[1]), float(qpos[2])]
+            # Convert MuJoCo [w, x, y, z] to standard [x, y, z, w]
+            base_quat = [float(qpos[4]), float(qpos[5]), float(qpos[6]), float(qpos[3])]
+            lin_vel = [float(qvel[0]), float(qvel[1]), float(qvel[2])]
+            ang_vel = [float(qvel[3]), float(qvel[4]), float(qvel[5])]
+
+            # All 25 joint positions and velocities in SIM_JOINTS order
+            joint_positions = [float(qpos[adr]) for adr in backend.actuator_qposadr]
+            joint_velocities = [float(qvel[adr]) for adr in backend.actuator_dofadr]
+
+            cmd_vx = float(getattr(core, "current_vx", 0.0))
+            cmd_vy = float(getattr(core, "current_vy", 0.0))
+            cmd_wz = float(getattr(core, "current_vyaw", 0.0))
+
+        return pack_state_packet(
+            sequence=self.binary_sequence,
+            timestamp=sim_time,
+            robot_mode=robot_mode,
+            policy_id=policy_id,
+            recovery_state=recovery_state,
+            safety_state=safety_state,
+            flags=flags,
+            base_position=base_pos,
+            base_orientation=base_quat,
+            linear_velocity=lin_vel,
+            angular_velocity=ang_vel,
+            joint_positions=joint_positions,
+            joint_velocities=joint_velocities,
+            command_linear_x=cmd_vx,
+            command_linear_y=cmd_vy,
+            command_yaw=cmd_wz,
+        )
+
+    def _broadcast_binary_ws(self, payload: bytes) -> None:
+        """Push binary state packet to all registered binary WebSocket clients."""
+        if not self.binary_ws_clients or self._ws_loop is None or not self._ws_loop.is_running():
+            return
+
+        async def _send_all():
+            dead = []
+            for ws in list(self.binary_ws_clients):
+                try:
+                    await ws.send(payload)
+                except Exception:
+                    dead.append(ws)
+            for ws in dead:
+                self.binary_ws_clients.discard(ws)
+
+        try:
+            asyncio.run_coroutine_threadsafe(_send_all(), self._ws_loop)
+        except Exception:
+            pass
+
     # ── Telemetry Broadcast Loop ─────────────────────────────────────────────
 
     def _telemetry_broadcast_loop(self) -> None:
-        """Periodic canonical telemetry broadcaster (~25-30 Hz)."""
+        """Periodic state broadcaster: binary state @ 50 Hz, JSON @ ~25 Hz."""
+        tick = 0
         while self.running and not self._shutdown_event.is_set():
             t0 = time.perf_counter()
+            tick += 1
 
-            if self.replay_manager.active:
-                if self.replay_manager.playing:
-                    fr = self.replay_manager.step(1)
+            # 1. Binary state broadcast at 50 Hz (every tick)
+            if self.binary_ws_clients:
+                try:
+                    bin_packet = self.build_binary_state_packet()
+                    self.latest_binary_packet = bin_packet
+                    self._broadcast_binary_ws(bin_packet)
+                except Exception as e:
+                    log.debug("[GATEWAY] Binary state packing error: %s", e)
+
+            # 2. JSON telemetry broadcast at ~25 Hz (every 2nd tick)
+            if self.ws_clients and (tick % 2 == 0):
+                if self.replay_manager.active:
+                    if self.replay_manager.playing:
+                        fr = self.replay_manager.step(1)
+                    else:
+                        fr = self.replay_manager.get_current_frame()
+                    frame = {
+                        "replay": True,
+                        "replay_data": fr,
+                        **self.frame_builder.build_frame(
+                            event_log=self.control_handler.recent_events,
+                            camera_meta=self.camera_streamer.get_camera_metadata(),
+                        ),
+                    }
                 else:
-                    fr = self.replay_manager.get_current_frame()
-                frame = {
-                    "replay": True,
-                    "replay_data": fr,
-                    **self.frame_builder.build_frame(
+                    frame = self.frame_builder.build_frame(
                         event_log=self.control_handler.recent_events,
                         camera_meta=self.camera_streamer.get_camera_metadata(),
-                    ),
-                }
-            else:
-                frame = self.frame_builder.build_frame(
-                    event_log=self.control_handler.recent_events,
-                    camera_meta=self.camera_streamer.get_camera_metadata(),
-                )
+                    )
 
-            self.latest_frame = frame
-            try:
-                payload = json.dumps(frame)
-                self.latest_json = payload
-                self._broadcast_ws(payload)
-            except Exception as e:
-                log.debug("[GATEWAY] Serialization error: %s", e)
+                self.latest_frame = frame
+                try:
+                    payload = json.dumps(frame)
+                    self.latest_json = payload
+                    self._broadcast_ws(payload)
+                except Exception as e:
+                    log.debug("[GATEWAY] Serialization error: %s", e)
 
-            # Sleep to match ~25-30 Hz
+            # Cadence paced to 50 Hz (20 ms interval)
             elapsed = time.perf_counter() - t0
-            sleep_t = max(0.005, (1.0 / 25.0) - elapsed)
+            sleep_t = max(0.002, (1.0 / 50.0) - elapsed)
             time.sleep(sleep_t)
 
     # ── WebSocket Server ─────────────────────────────────────────────────────
@@ -224,18 +335,57 @@ class WebGateway:
 
             try:
                 async for message in websocket:
-                    # Handle binary or JSON client command over websocket
+                    # A. Binary VAC1 Command packet handling (Asimov Controller 3D)
+                    if isinstance(message, (bytes, bytearray)):
+                        raw_bytes = bytes(message)
+                        if len(raw_bytes) == COMMAND_PACKET_SIZE and raw_bytes[:4] == COMMAND_MAGIC:
+                            cmd = unpack_command_packet(raw_bytes)
+                            if websocket not in self.binary_ws_clients:
+                                self.binary_ws_clients.add(websocket)
+                                self.ws_clients.discard(websocket)
+
+                            ctype = cmd["command_type"]
+                            action = ""
+                            params = {}
+                            if ctype == CommandType.WALK:
+                                action = "walk"
+                                params = {"vx": cmd["linear_x"], "vy": cmd["linear_y"], "wz": cmd["yaw_rate"]}
+                            elif ctype == CommandType.STAND:
+                                action = "stand"
+                            elif ctype == CommandType.CROUCH:
+                                action = "crouch"
+                            elif ctype == CommandType.RECOVERY:
+                                action = "getup"
+                            elif ctype == CommandType.RESET:
+                                action = "reset"
+                            elif ctype in (CommandType.ESTOP, CommandType.DAMP):
+                                action = "damp"
+
+                            if action:
+                                self.control_handler.handle_command(action, params)
+                            continue
+
+                        # WebRTC Gateway BinaryProtocol fallback
+                        from web.server.webrtc_gateway import BinaryProtocol
+                        parsed = BinaryProtocol.unpack_control(raw_bytes)
+                        if parsed:
+                            ack = self.control_handler.handle_command(parsed["action"], parsed["params"])
+                            await websocket.send(json.dumps({"type": "ack", "ack": ack}))
+                            continue
+
+                    # B. Text JSON Command / Subscription handling
                     try:
-                        if isinstance(message, (bytes, bytearray)):
-                            from web.server.webrtc_gateway import BinaryProtocol
-                            parsed = BinaryProtocol.unpack_control(bytes(message))
-                            if parsed:
-                                ack = self.control_handler.handle_command(parsed["action"], parsed["params"])
-                                await websocket.send(json.dumps({"type": "ack", "ack": ack}))
-                                continue
                         data = json.loads(message)
                         action = data.get("action", "")
                         params = data.get("params", data.get("command_data", {}))
+
+                        # Client requested binary streaming
+                        if (action == "subscribe" and params.get("format") == "binary") or data.get("format") == "binary":
+                            self.binary_ws_clients.add(websocket)
+                            self.ws_clients.discard(websocket)
+                            await websocket.send(json.dumps({"type": "subscribed", "format": "binary"}))
+                            continue
+
                         ack = self.control_handler.handle_command(action, params)
                         await websocket.send(json.dumps({"type": "ack", "ack": ack}))
                     except Exception as err:
@@ -244,6 +394,7 @@ class WebGateway:
                 pass
             finally:
                 self.ws_clients.discard(websocket)
+                self.binary_ws_clients.discard(websocket)
 
         async def run_server():
             async with websockets.serve(handler, self.host, self.ws_port) as server:

@@ -203,7 +203,7 @@ class EdgeCore:
         log.info("Entered STAND: ramping to default standing pose over %.1fs", STAND_RAMP_DURATION_S)
         return True
 
-    def command_damp(self, controller: str = "sdk") -> bool:
+    def command_damp(self, controller: str = "sdk", current_time: Optional[float] = None) -> bool:
         """Handle DAMP request."""
         if controller != self.active_controller:
             log.warning("DAMP command rejected: inactive controller '%s'", controller)

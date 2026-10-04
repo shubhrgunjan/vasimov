@@ -187,6 +187,10 @@ class CameraStreamer:
     def _sync_model_if_changed(self) -> None:
         """If simulation environment loaded a new MjModel, synchronize render resources."""
         if self.model != self.backend.model:
+            # Ensure GL context is never recreated across threads in GLX
+            if self._thread and self._thread.is_alive() and threading.current_thread() != self._thread:
+                return
+
             with self._render_lock:
                 self.model = self.backend.model
                 self.render_data = mujoco.MjData(self.model)
@@ -234,6 +238,8 @@ class CameraStreamer:
             log.error("[CAMERA] Could not initialize MuJoCo Renderer: %s", e)
             return
 
+        last_secondary_render = 0.0
+
         try:
             while self.running:
                 t0 = time.perf_counter()
@@ -248,10 +254,18 @@ class CameraStreamer:
                         log.debug("[CAMERA] mj_copyData error during state copy: %s", e)
                         continue
 
-                # Render primary active camera (100% frame budget dedicated to live operator feed)
+                # 1. Render primary active camera (100% frame budget dedicated to live operator feed)
                 self._render_single(self.primary_camera, self.primary_xray, sim_time)
                 if self.primary_xray:
                     self._render_single(self.primary_camera, False, sim_time)
+
+                # 2. Render other camera thumbnails periodically (~5-10 Hz)
+                now = time.perf_counter()
+                if now - last_secondary_render >= 0.15:
+                    last_secondary_render = now
+                    for cam in self.all_cameras:
+                        if cam != self.primary_camera:
+                            self._render_single(cam, False, sim_time)
 
                 elapsed = time.perf_counter() - t0
                 target_dt = 1.0 / float(self.target_fps)  # adaptive (25 FPS or 60 FPS)
@@ -280,7 +294,19 @@ class CameraStreamer:
             if frame is not None:
                 return frame
 
-        # On-demand fallback if cache is cold
+        # If render loop thread is active, wait briefly for background thread to render
+        if self.running and self._thread and self._thread.is_alive():
+            t_start = time.perf_counter()
+            while time.perf_counter() - t_start < 0.4:
+                time.sleep(0.01)
+                with self._lock:
+                    frame = self.frame_cache.get((camera_name, xray))
+                    if frame is not None:
+                        return frame
+            with self._lock:
+                return self.frame_cache.get((camera_name, xray))
+
+        # Single-threaded on-demand fallback if streamer thread is not running
         try:
             with self.backend._lock:
                 sim_time = float(self.backend.data.time)
