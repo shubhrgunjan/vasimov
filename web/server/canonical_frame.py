@@ -280,15 +280,18 @@ class CanonicalFrameBuilder:
 
             # ── 7. Environment ───────────────────────────────────────────────
             env_state = backend.get_environment_state()
+            current_preset_name = env_state.get("preset", env_state.get("name", "flat"))
+            available_list = list(backend.env_manager.list_presets().keys()) if hasattr(backend, "env_manager") else list(PRESETS.keys())
             env_data = {
-                "name": env_state.get("name", "flat"),
+                "name": current_preset_name,
+                "preset": current_preset_name,
                 "description": env_state.get("description", ""),
                 "ground_friction": env_state.get("ground_friction", 1.0),
                 "mass_scale": env_state.get("mass_scale", 1.0),
                 "gravity": env_state.get("gravity", [0.0, 0.0, -9.81]),
                 "obstacles": env_state.get("obstacles", []),
                 "obstacle_count": env_state.get("obstacle_count", 0),
-                "available_presets": list(PRESETS.keys()),
+                "available_presets": available_list,
             }
 
             # ── 8. Cameras ───────────────────────────────────────────────────

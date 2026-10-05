@@ -322,7 +322,10 @@ class ControlHandler:
         # ── 9. ENVIRONMENT PRESET ────────────────────────────────────────────
         elif action == "environment":
             preset = str(params.get("preset", "flat")).strip()
-            if preset in PRESETS:
+            available = set(PRESETS.keys())
+            if hasattr(self.backend, "env_manager"):
+                available.update(self.backend.env_manager.list_presets().keys())
+            if preset in available:
                 self.backend.load_environment(preset)
                 if hasattr(self, "camera_streamer") and self.camera_streamer:
                     try:
@@ -331,11 +334,12 @@ class ControlHandler:
                         pass
                 ack["status"] = "accepted"
                 ack["lifecycle"]["applied"] = f"Loaded preset '{preset}'"
-                ack["lifecycle"]["simulator_result"] = f"env = {preset}, friction = {PRESETS[preset]['ground_friction']}"
+                friction_val = self.backend.env_manager.active_config.get("ground_friction", 1.0) if hasattr(self.backend, "env_manager") else 1.0
+                ack["lifecycle"]["simulator_result"] = f"env = {preset}, friction = {friction_val}"
                 self.record_event(f"Environment loaded: '{preset}'")
             else:
                 ack["status"] = "rejected"
-                ack["lifecycle"]["validation"] = f"Unknown preset '{preset}'. Available: {list(PRESETS.keys())}"
+                ack["lifecycle"]["validation"] = f"Unknown preset '{preset}'. Available: {list(available)}"
 
         # ── 10. GANTRY ───────────────────────────────────────────────────────
         elif action == "gantry":

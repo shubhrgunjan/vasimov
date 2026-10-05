@@ -412,15 +412,56 @@ class EnvironmentManager:
             raw_xml = data.get("xml_content", "")
             return cfg, raw_xml
         elif ext == ".xml":
+            xml_dir = file_path.parent
+            def resolve_asset_match(match):
+                attr = match.group(1)
+                rel_val = match.group(2)
+                cand = (xml_dir / rel_val).resolve()
+                if cand.exists():
+                    return f'{attr}="{cand}"'
+                return match.group(0)
+
+            def resolve_asset_match(m):
+                rel_path = m.group(1)
+                cand = (xml_dir / rel_path).resolve()
+                if cand.exists():
+                    return f'file="{cand}"'
+                return m.group(0)
+            resolved_text = re.sub(r'file=["\']([^"\']+)["\']', resolve_asset_match, file_text)
+
+            # Extract any box/sphere/cylinder bodies as obstacles for client telemetry
+            obstacles = []
+            try:
+                root = ET.fromstring(file_text)
+                for body in root.iter('body'):
+                    bname = body.get('name', '')
+                    pos_str = body.get('pos', '0 0 0')
+                    pos = [float(x) for x in pos_str.split()]
+                    geom = body.find('geom')
+                    if geom is not None:
+                        gtype = geom.get('type', 'box')
+                        size_str = geom.get('size', '0.1 0.1 0.1')
+                        size = [float(x) for x in size_str.split()]
+                        obstacles.append({
+                            'name': bname,
+                            'type': gtype,
+                            'pos': pos,
+                            'size': size,
+                            'dynamic': body.find('freejoint') is not None,
+                        })
+            except Exception:
+                pass
+
             cfg = {
                 "name": file_path.stem,
-                "description": f"Custom MuJoCo XML environment ({file_path.name})",
+                "preset": file_path.stem,
+                "description": f"PAIR Lab MUJOCO Environment ({file_path.name})",
                 "ground_friction": 1.0,
                 "mass_scale": 1.0,
                 "gravity": [0.0, 0.0, -9.81],
-                "obstacles": [],
+                "obstacles": obstacles,
             }
-            return cfg, file_text
+            return cfg, resolved_text
         else:
             raise ValueError(f"Unsupported environment file extension '{ext}'. Must be .yaml, .yml, or .xml")
 
@@ -474,7 +515,7 @@ class EnvironmentManager:
         cfg, raw_xml = self.parse_custom_file(fpath)
 
         obstacles = cfg.get("obstacles", [])
-        obstacle_xmls = self._build_obstacle_xmls(obstacles)
+        obstacle_xmls = self._build_obstacle_xmls(obstacles) if fpath.suffix.lower() != ".xml" else []
 
         base_xml_text = self.base_xml_path.read_text(encoding="utf-8")
         modified_xml = _combine_custom_xml_into_base(

@@ -275,6 +275,19 @@ class WebGateway:
                 except Exception as e:
                     log.debug("[GATEWAY] Binary state packing error: %s", e)
 
+
+
+            # Check for PC environment preset change at 5 Hz
+            if tick % 10 == 0:
+                try:
+                    cur_preset = getattr(self.backend.env_manager, "current_preset", None)
+                    if cur_preset and getattr(self, "_last_broadcast_preset", None) != cur_preset:
+                        self._last_broadcast_preset = cur_preset
+                        env_state = self.backend.get_environment_state()
+                        self._broadcast_text_to_all(json.dumps({"type": "environment", "data": env_state}))
+                except Exception:
+                    pass
+
             # 2. JSON telemetry broadcast at ~25 Hz (every 2nd tick)
             if self.ws_clients and (tick % 2 == 0):
                 if self.replay_manager.active:
@@ -384,6 +397,29 @@ class WebGateway:
                             self.binary_ws_clients.add(websocket)
                             self.ws_clients.discard(websocket)
                             await websocket.send(json.dumps({"type": "subscribed", "format": "binary"}))
+                            try:
+                                env_state = self.backend.get_environment_state()
+                                await websocket.send(json.dumps({"type": "environment", "data": env_state}))
+                            except Exception:
+                                pass
+                            continue
+
+                        if action == "get_environment":
+                            try:
+                                env_state = self.backend.get_environment_state()
+                                await websocket.send(json.dumps({"type": "environment", "data": env_state}))
+                            except Exception as e:
+                                await websocket.send(json.dumps({"type": "error", "message": str(e)}))
+                            continue
+
+                        if action == "environment":
+                            ack = self.control_handler.handle_command(action, params)
+                            try:
+                                env_state = self.backend.get_environment_state()
+                                env_msg = json.dumps({"type": "environment", "data": env_state, "ack": ack})
+                                self._broadcast_text_to_all(env_msg)
+                            except Exception:
+                                await websocket.send(json.dumps({"type": "ack", "ack": ack}))
                             continue
 
                         ack = self.control_handler.handle_command(action, params)
@@ -409,6 +445,26 @@ class WebGateway:
                 log.warning("[GATEWAY] WebSocket server error: %s", e)
         finally:
             self._ws_loop.close()
+
+    def _broadcast_text_to_all(self, payload: str) -> None:
+        """Push text payload to all connected clients (both JSON and binary subscribers)."""
+        if self._ws_loop is None or not self._ws_loop.is_running():
+            return
+        all_clients = list(self.ws_clients) + list(self.binary_ws_clients)
+        if not all_clients:
+            return
+
+        async def _send_all():
+            for ws in all_clients:
+                try:
+                    await ws.send(payload)
+                except Exception:
+                    pass
+
+        try:
+            asyncio.run_coroutine_threadsafe(_send_all(), self._ws_loop)
+        except Exception:
+            pass
 
     def _broadcast_ws(self, payload: str) -> None:
         """Push payload to all connected WebSocket clients."""

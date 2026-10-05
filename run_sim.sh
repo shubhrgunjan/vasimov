@@ -4,6 +4,10 @@
 # ==============================================================================
 set -e
 
+if [ "$(uname -s)" = "Linux" ] && [ -z "$DISPLAY" ]; then
+    export MUJOCO_GL="${MUJOCO_GL:-egl}"
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 

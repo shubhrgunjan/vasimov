@@ -232,6 +232,11 @@ class SimBackend:
 
         from edge.environment import EnvironmentManager
         self.env_manager = EnvironmentManager(self.model_path)
+        if (self.env_manager.environments_dir / "pair_lab.xml").exists():
+            try:
+                self.load_environment("pair_lab")
+            except Exception as e:
+                log.warning("[SIM] Could not load default pair_lab environment: %s", e)
 
         # Emote & gesture engine
         self.emote_controller = EmoteController(self.core.default_pose_sim)

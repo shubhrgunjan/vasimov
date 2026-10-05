@@ -25,7 +25,7 @@ import numpy as np
 import sys
 if sys.platform == "darwin":
     os.environ.setdefault("MUJOCO_GL", "cgl")
-elif sys.platform.startswith("linux"):
+elif sys.platform.startswith("linux") and "DISPLAY" not in os.environ:
     os.environ.setdefault("MUJOCO_GL", "egl")
 else:
     os.environ.setdefault("MUJOCO_GL", "osmesa")

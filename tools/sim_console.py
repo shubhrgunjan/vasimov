@@ -33,6 +33,9 @@ from pathlib import Path
 import select
 import sys
 import threading
+
+if sys.platform.startswith("linux") and "DISPLAY" not in os.environ:
+    os.environ.setdefault("MUJOCO_GL", "egl")
 import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -1664,7 +1667,7 @@ def main() -> int:
     parser.add_argument("--telemetry-verbosity", type=str, default="normal", choices=["minimal", "normal", "verbose", "raw"], help="Telemetry verbosity")
     parser.add_argument("--telemetry-rate", type=float, default=2.0, help="Periodic telemetry rate in Hz")
     parser.add_argument("--script", type=str, default=None, help="Path to batch command script file")
-    parser.add_argument("--web", action="store_true", help="Launch live web dashboard gateway alongside interactive console")
+    parser.add_argument("--web", action=argparse.BooleanOptionalAction, default=True, help="Launch live web dashboard gateway alongside interactive console (default: True)")
     parser.add_argument("--web-host", type=str, default="0.0.0.0", help="HTTP & WS host to bind gateway (default: 0.0.0.0)")
     parser.add_argument("--web-port", type=int, default=8852, help="HTTP web port for dashboard (default: 8852)")
     parser.add_argument("--ws-port", type=int, default=8854, help="WebSocket telemetry port (default: 8854)")
