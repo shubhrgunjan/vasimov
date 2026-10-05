@@ -567,6 +567,30 @@ class WebGateway:
                     self.wfile.write(body)
                     return
 
+                # 3b. Local session discovery endpoint
+                if path in ("/session", "/api/session"):
+                    req_host = self.headers.get("Host", "127.0.0.1").split(":")[0]
+                    host = req_host if req_host not in ("0.0.0.0", "") else "127.0.0.1"
+                    data = {
+                        "running": True,
+                        "session_id": "asimov-local-sim",
+                        "transport": "websocket",
+                        "ws_url": f"ws://{host}:{gateway.ws_port}",
+                        "http_url": f"http://{host}:{gateway.http_port}",
+                        "webrtc_url": f"ws://{host}:7880",
+                        "room": "asimov-teleop",
+                        "robot_id": "asimov-1",
+                        "format": "binary",
+                        "protocol": "VAS1",
+                    }
+                    body = json.dumps(data).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+
                 # 4. Backward-compatible /status endpoint
                 if path == "/status":
                     sim_z = float(gateway.backend.data.qpos[2])
